@@ -1262,19 +1262,19 @@ export default function App() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex justify-between items-center pt-3 border-t border-cyber-slate/20 mt-2">
+                      <div className="flex justify-between items-center gap-2 pt-3 border-t border-cyber-slate/20 mt-2">
                         {/* Blacklist toggle */}
                         <button
                           onClick={() => handleToggleBlacklist(candidate)}
-                          className={`flex items-center gap-1 py-1 px-2.5 rounded border text-[9px] font-mono uppercase tracking-wider transition-colors ${
+                          className={`flex items-center gap-1 py-1.5 px-2 rounded border text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 ${
                             candidate.is_blacklisted
-                              ? 'bg-cyber-green/10 border-cyber-green/30 text-cyber-green hover:bg-cyber-green/20'
-                              : 'bg-cyber-magenta/10 border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20'
+                              ? 'bg-cyber-magenta/10 border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20'
+                              : 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/20'
                           }`}
                           title={candidate.is_blacklisted ? 'Whitelist candidate record' : 'Blacklist candidate record'}
                         >
-                          {candidate.is_blacklisted ? <UserCheck size={10} /> : <UserX size={10} />}
-                          <span>{candidate.is_blacklisted ? 'Whitelist' : 'Blacklist'}</span>
+                          {candidate.is_blacklisted ? <UserCheck size={10} className="shrink-0" /> : <UserX size={10} className="shrink-0" />}
+                          <span>{candidate.is_blacklisted ? 'BLACKLISTED (whitelist)' : 'BLACKLIST'}</span>
                         </button>
 
                         <div className="flex items-center gap-2">
