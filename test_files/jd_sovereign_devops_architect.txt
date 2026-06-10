@@ -1,0 +1,7 @@
+Role: Sovereign cloud & DevOps Architect
+Layer: Layer 1 — Infrastructure
+Category: Engineering
+Engagement: Full-Time
+Summary: Builds and operates sovereign, air-gapped cloud infrastructure that keeps models and data inside client jurisdiction. Operates private Kubernetes clusters.
+Red Flags: Cloud-only experience without private air-gap infrastructure deployment; no understanding of local residency laws.
+Offerings: Secure Bare-metal setup, private container registry.

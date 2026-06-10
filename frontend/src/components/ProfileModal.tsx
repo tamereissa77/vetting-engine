@@ -70,23 +70,49 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   };
 
   const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setIsProcessing(true);
-    setStatusMessage(`Parsing job description from ${file.name}...`);
     setError('');
     try {
-      const result = await api.importProfileFile(file);
-      setRoleName(result.role_name);
-      setStackLayer(result.stack_layer);
-      setCategory(result.category);
-      setEngagementTier(result.engagement_tier);
-      setRoleSummary(result.role_summary);
-      setRedFlags(result.red_flags);
-      setOfferings(result.offerings || '');
+      if (files.length === 1) {
+        const file = files[0];
+        setStatusMessage(`Parsing job description from ${file.name}...`);
+        const result = await api.importProfileFile(file);
+        setRoleName(result.role_name);
+        setStackLayer(result.stack_layer);
+        setCategory(result.category);
+        setEngagementTier(result.engagement_tier);
+        setRoleSummary(result.role_summary);
+        setRedFlags(result.red_flags);
+        setOfferings(result.offerings || '');
+      } else {
+        setStatusMessage(`Bulk importing ${files.length} profiles...`);
+        let lastResult: TalentProfile | null = null;
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          setStatusMessage(`Parsing and saving profile ${i + 1}/${files.length} (${file.name})...`);
+          const result = await api.importProfileFile(file);
+          
+          const saved = await api.createProfile({
+            role_name: result.role_name,
+            stack_layer: result.stack_layer,
+            category: result.category,
+            engagement_tier: result.engagement_tier,
+            role_summary: result.role_summary,
+            red_flags: result.red_flags,
+            offerings: result.offerings || ''
+          });
+          lastResult = saved;
+        }
+        
+        if (lastResult) {
+          onSave(lastResult);
+        }
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to parse job description file.');
+      setError(err.message || 'Failed to parse job description file(s).');
     } finally {
       setIsProcessing(false);
       setStatusMessage('');
@@ -180,6 +206,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                 <span>📄</span> Import File
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.docx,.txt"
                   onChange={handleFileImport}
                   className="hidden"

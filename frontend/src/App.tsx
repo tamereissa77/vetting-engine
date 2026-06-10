@@ -287,23 +287,28 @@ export default function App() {
     e.stopPropagation();
     setDragActive(false);
     
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      uploadFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      uploadMultipleFiles(e.dataTransfer.files);
     }
   };
-
+ 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      uploadFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      uploadMultipleFiles(e.target.files);
     }
   };
-
-  const uploadFile = async (file: File) => {
-    try {
-      const res = await api.uploadCV(file);
-      startTaskProgressStream(res.task_id);
-    } catch (err) {
-      alert('File upload failed: ' + err);
+ 
+  const uploadMultipleFiles = async (files: FileList) => {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const res = await api.uploadCV(file);
+        // Start streaming task progress. If multiple files are uploaded, 
+        // the progress logger will track the latest launched task.
+        startTaskProgressStream(res.task_id);
+      } catch (err: any) {
+        alert(`Failed to upload ${file.name}: ` + (err.message || err));
+      }
     }
   };
 
@@ -607,6 +612,7 @@ export default function App() {
                   <input
                     id="file-upload-input"
                     type="file"
+                    multiple
                     className="hidden"
                     accept=".pdf,.docx,.txt"
                     onChange={handleFileChange}

@@ -1,0 +1,5 @@
+Full Name: Sarah Chen
+Email: sarah.chen@ai-sovereignty.io
+Skills: PyTorch, Model evaluations, LLM alignment, Python, compliance reports
+Experience: 4 years checking data drift and bias in custom foundation models. Expertise in evaluating open-weights models.
+Engagement: Fractional

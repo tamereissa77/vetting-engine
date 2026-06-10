@@ -1,0 +1,7 @@
+Role: Sovereign Model Validator & Compliance Specialist
+Layer: Layer 3 — Model
+Category: Compliance
+Engagement: Fractional / Project
+Summary: Performs local verification, bias testing, and alignment evaluation of open weights models to meet sovereign standards.
+Red Flags: Only uses OpenAI API with no local open-weights weights verification experience; theoretical focus without code execution tools.
+Offerings: Local alignment reports, model stress-tests.

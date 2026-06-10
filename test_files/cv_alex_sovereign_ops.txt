@@ -1,0 +1,5 @@
+Full Name: Alex Mercer
+Email: alex.mercer@sovereignmail.org
+Skills: Docker, Kubernetes, Linux, Bare-metal network routing, Python, Air-gapped orchestration
+Experience: 8 years of network engineering and infrastructure management. Designed localized cloud storage systems.
+Engagement: Full-Time (core)
