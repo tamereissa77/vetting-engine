@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { TalentProfile } from '../utils/api';
+import { TalentProfile, api } from '../utils/api';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -41,6 +41,58 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   const [redFlags, setRedFlags] = useState('');
   const [offerings, setOfferings] = useState('');
   const [error, setError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+
+  const handleAutoGenerate = async () => {
+    if (!roleName.trim()) {
+      setError('Please enter a Role Name first to generate a profile.');
+      return;
+    }
+    setIsProcessing(true);
+    setStatusMessage('Generating structured talent profile requirements from title...');
+    setError('');
+    try {
+      const result = await api.generateProfileFromTitle(roleName);
+      setRoleName(result.role_name);
+      setStackLayer(result.stack_layer);
+      setCategory(result.category);
+      setEngagementTier(result.engagement_tier);
+      setRoleSummary(result.role_summary);
+      setRedFlags(result.red_flags);
+      setOfferings(result.offerings || '');
+    } catch (err: any) {
+      setError(err.message || 'Failed to auto-generate profile.');
+    } finally {
+      setIsProcessing(false);
+      setStatusMessage('');
+    }
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setStatusMessage(`Parsing job description from ${file.name}...`);
+    setError('');
+    try {
+      const result = await api.importProfileFile(file);
+      setRoleName(result.role_name);
+      setStackLayer(result.stack_layer);
+      setCategory(result.category);
+      setEngagementTier(result.engagement_tier);
+      setRoleSummary(result.role_summary);
+      setRedFlags(result.red_flags);
+      setOfferings(result.offerings || '');
+    } catch (err: any) {
+      setError(err.message || 'Failed to parse job description file.');
+    } finally {
+      setIsProcessing(false);
+      setStatusMessage('');
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     if (initialProfile) {
@@ -112,12 +164,68 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             </div>
           )}
 
+          {/* AI & File Import Helper Block */}
+          <div className="p-4 bg-cyber-dark/40 border border-cyber-cyan/20 rounded-md flex flex-col md:flex-row items-start md:items-center justify-between gap-3 font-mono text-xs">
+            <div className="flex flex-col gap-1">
+              <div className="text-cyber-cyan font-bold uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                <span>⚡</span> AI & Document Importer
+              </div>
+              <div className="text-slate-400 font-sans text-xs">
+                Import a job description file (.pdf, .docx, .txt) or auto-generate from the title.
+              </div>
+            </div>
+            <div className="flex gap-2 w-full md:w-auto shrink-0 justify-end">
+              {/* File Import Button */}
+              <label className={`flex items-center gap-1.5 px-3 py-1.5 border border-cyber-cyan/50 hover:bg-cyber-cyan/10 text-cyber-cyan cursor-pointer rounded transition-all font-sans text-xs ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <span>📄</span> Import File
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt"
+                  onChange={handleFileImport}
+                  className="hidden"
+                  disabled={isProcessing}
+                />
+              </label>
+              {/* AI Generate Button */}
+              <button
+                type="button"
+                onClick={handleAutoGenerate}
+                disabled={isProcessing || !roleName.trim()}
+                className={`flex items-center gap-1.5 px-3 py-1.5 border border-cyber-magenta/50 hover:bg-cyber-magenta/10 text-cyber-magenta rounded transition-all font-sans text-xs ${
+                  (!roleName.trim() || isProcessing) ? 'opacity-50 cursor-not-allowed border-cyber-slate text-slate-500' : ''
+                }`}
+              >
+                <span>✨</span> Generate from Title
+              </button>
+            </div>
+          </div>
+
+          {isProcessing && (
+            <div className="p-4 bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan rounded flex items-center gap-3 font-mono">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyber-cyan border-t-transparent"></div>
+              <span>{statusMessage}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Role Name */}
             <div className="space-y-1">
-              <label className="block text-xs font-mono uppercase tracking-wider text-slate-400">
-                Role Name <span className="text-cyber-magenta">*</span>
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="block text-xs font-mono uppercase tracking-wider text-slate-400">
+                  Role Name <span className="text-cyber-magenta">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAutoGenerate}
+                  disabled={isProcessing || !roleName.trim()}
+                  className={`text-[10px] font-mono uppercase tracking-wider text-cyber-magenta hover:text-cyber-cyan transition-colors flex items-center gap-1.5 ${
+                    (!roleName.trim() || isProcessing) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                  title="Auto-fill all profile fields using AI based on the current Role Name"
+                >
+                  <span>✨</span> Auto-Fill with AI
+                </button>
+              </div>
               <input
                 type="text"
                 value={roleName}
@@ -232,9 +340,10 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-gradient-to-r from-cyber-cyan/80 to-cyber-magenta/80 hover:from-cyber-cyan hover:to-cyber-magenta border border-cyber-cyan/50 text-white rounded font-mono btn-cyan-glow transition-all"
+              disabled={isProcessing}
+              className={`px-5 py-2 bg-gradient-to-r from-cyber-cyan/80 to-cyber-magenta/80 hover:from-cyber-cyan hover:to-cyber-magenta border border-cyber-cyan/50 text-white rounded font-mono btn-cyan-glow transition-all ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              SAVE RECORD
+              {isProcessing ? 'PROCESSING...' : 'SAVE RECORD'}
             </button>
           </div>
         </form>

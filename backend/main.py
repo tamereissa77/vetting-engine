@@ -48,6 +48,9 @@ class ProfileSchema(BaseModel):
 class MatchRequestSchema(BaseModel):
     profile_ids: List[int]
 
+class GenerateProfileRequest(BaseModel):
+    title: str
+
 class CandidateCreateUpdateSchema(BaseModel):
     full_name: str
     email: Optional[str] = ""
@@ -127,6 +130,52 @@ def delete_profile(profile_id: int, database: Session = Depends(db.get_db)):
     database.delete(db_profile)
     database.commit()
     return {"message": f"Profile {profile_id} successfully purged."}
+
+@app.post("/api/profiles/import-file")
+async def import_profile_file(file: UploadFile = File(...)):
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    
+    contents = await file.read()
+    jd_text = ""
+
+    try:
+        if ext == ".pdf":
+            import io
+            from pypdf import PdfReader
+            pdf_file = io.BytesIO(contents)
+            reader = PdfReader(pdf_file)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    jd_text += text + "\n"
+        elif ext == ".docx":
+            import docx2txt
+            import io
+            docx_file = io.BytesIO(contents)
+            jd_text = docx2txt.process(docx_file)
+        else:
+            # Try decoding as standard text
+            jd_text = contents.decode("utf-8", errors="ignore")
+    except Exception as e:
+        print(f"Error reading file structure: {e}")
+        raise HTTPException(status_code=400, detail=f"Unsupported or corrupted file structure: {e}")
+
+    if not jd_text.strip():
+        raise HTTPException(status_code=400, detail="Empty job description file.")
+
+    import ai
+    parsed_data = ai.parse_job_description(jd_text)
+    return parsed_data
+
+@app.post("/api/profiles/generate")
+def generate_profile_from_title(req: GenerateProfileRequest):
+    if not req.title.strip():
+        raise HTTPException(status_code=400, detail="Title cannot be empty.")
+    
+    import ai
+    generated_data = ai.generate_job_description(req.title)
+    return generated_data
 
 # Candidates and Uploads
 

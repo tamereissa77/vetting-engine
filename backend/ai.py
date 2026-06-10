@@ -44,16 +44,24 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
             return resp.json()["choices"][0]["message"]["content"]
 
         elif LLM_PROVIDER == "gemini" and GEMINI_API_KEY:
-            url = f"https://generativelanguage.googleapis.com/v1beta2/models/{GEMINI_MODEL}:generateText?key={GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
             headers = {"Content-Type": "application/json; charset=utf-8"}
             combined_prompt = f"{system_prompt}\n\nUser Input:\n{prompt}"
 
             data = {
-                "prompt": {
-                    "text": combined_prompt
-                },
-                "temperature": 0.2,
-                "maxOutputTokens": 1024
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": combined_prompt
+                            }
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "maxOutputTokens": 8192
+                }
             }
 
             resp = requests.post(url, headers=headers, json=data, timeout=30)
@@ -63,11 +71,13 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
             if "candidates" in body and len(body["candidates"]) > 0:
                 candidate = body["candidates"][0]
                 if isinstance(candidate, dict):
-                    if "output" in candidate:
-                        return candidate["output"]
                     if "content" in candidate:
                         content = candidate["content"]
-                        if isinstance(content, list) and len(content) > 0:
+                        if isinstance(content, dict):
+                            parts = content.get("parts", [])
+                            if isinstance(parts, list) and len(parts) > 0:
+                                return parts[0].get("text", "")
+                        elif isinstance(content, list) and len(content) > 0:
                             first = content[0]
                             if isinstance(first, dict) and "text" in first:
                                 return first["text"]
@@ -202,4 +212,126 @@ def assess_candidate(candidate_text: str, role_name: str, role_summary: str, red
             "skills_gap": ["Specific Sovereign AI framework proficiency"],
             "red_flags_detected": [],
             "ai_verdict": "Fallback Match: The AI model is currently offline or unreachable. A generic baseline match has been generated. Please verify the Ollama endpoint or provider keys."
+        }
+
+def coerce_to_string(val) -> str:
+    if isinstance(val, list):
+        return "\n".join([f"- {item}" for item in val if item])
+    if val is None:
+        return ""
+    return str(val)
+
+def parse_job_description(jd_text: str) -> dict:
+    """Parses raw job description text into a structured talent profile."""
+    system_prompt = (
+        "You are an expert AI recruiter. Your task is to extract structured talent profile information "
+        "from a raw job description text.\n"
+        "You must output ONLY a valid JSON object matching the following structure:\n"
+        "{\n"
+        "  \"role_name\": \"Lead AI Engineer\",\n"
+        "  \"stack_layer\": \"Layer 4 — AI / Reasoning\",\n"
+        "  \"category\": \"Engineering\",\n"
+        "  \"engagement_tier\": \"Full-Time\",\n"
+        "  \"role_summary\": \"Provide a clear summary of the role objectives, tech stack, and key responsibilities.\",\n"
+        "  \"red_flags\": \"Key disqualifying factors (e.g. No hands-on Python experience, no cloud exposure).\",\n"
+        "  \"offerings\": \"Optional deliverables or offerings mapped to this role (separated by commas or as a brief description).\"\n"
+        "}\n"
+        "Note for stack_layer: Select the closest match from these options:\n"
+        "- Layer 1 — Infrastructure\n"
+        "- Layer 2 — Data\n"
+        "- Layer 3 — Model\n"
+        "- Layer 4 — AI / Reasoning\n"
+        "- Layer 5 — Application\n"
+        "- Strategy & Advisory\n"
+        "- Strategy & Governance\n"
+        "- Strategy & Enablement\n"
+        "- Governance & Security\n"
+        "- Domain (Vertical)\n"
+    )
+    
+    prompt = (
+        "Analyze the following job description and extract the role's details. "
+        "If some fields are not clearly specified, guess or generate appropriate values that fit the role.\n\n"
+        f"Job Description Content:\n{jd_text}"
+    )
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "role_name": coerce_to_string(parsed.get("role_name") or "Unknown Role"),
+            "stack_layer": coerce_to_string(parsed.get("stack_layer") or "Layer 5 — Application"),
+            "category": coerce_to_string(parsed.get("category") or "Engineering"),
+            "engagement_tier": coerce_to_string(parsed.get("engagement_tier") or "Full-Time"),
+            "role_summary": coerce_to_string(parsed.get("role_summary") or ""),
+            "red_flags": coerce_to_string(parsed.get("red_flags") or ""),
+            "offerings": coerce_to_string(parsed.get("offerings") or "")
+        }
+    except Exception as e:
+        print(f"Failed to parse job description: {e}")
+        # Default mock values
+        return {
+            "role_name": "Imported Role",
+            "stack_layer": "Layer 5 — Application",
+            "category": "Engineering",
+            "engagement_tier": "Full-Time",
+            "role_summary": "Parsed from imported document.",
+            "red_flags": "No specific red flags extracted.",
+            "offerings": ""
+        }
+
+def generate_job_description(title: str) -> dict:
+    """Generates a structured talent profile based on a job title."""
+    system_prompt = (
+        "You are an expert AI recruiter. Your task is to generate structured talent profile details "
+        "based on the provided job title.\n"
+        "You must output ONLY a valid JSON object matching the following structure:\n"
+        "{\n"
+        "  \"role_name\": \"Generated Role Name matching the title\",\n"
+        "  \"stack_layer\": \"Layer 4 — AI / Reasoning\",\n"
+        "  \"category\": \"Engineering\",\n"
+        "  \"engagement_tier\": \"Full-Time\",\n"
+        "  \"role_summary\": \"A clear, professional summary of the role objectives, tech stack, and key responsibilities.\",\n"
+        "  \"red_flags\": \"3-4 key screen-out red flags or disqualifying factors, separated by semicolons or bullet points.\",\n"
+        "  \"offerings\": \"Deliverables or offerings mapped to this role (e.g. secure deployment, API integrations).\"\n"
+        "}\n"
+        "Note for stack_layer: Select the closest match from these options:\n"
+        "- Layer 1 — Infrastructure\n"
+        "- Layer 2 — Data\n"
+        "- Layer 3 — Model\n"
+        "- Layer 4 — AI / Reasoning\n"
+        "- Layer 5 — Application\n"
+        "- Strategy & Advisory\n"
+        "- Strategy & Governance\n"
+        "- Strategy & Enablement\n"
+        "- Governance & Security\n"
+        "- Domain (Vertical)\n"
+    )
+
+    prompt = f"Generate details for a talent profile with the title: '{title}'."
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "role_name": coerce_to_string(parsed.get("role_name") or title),
+            "stack_layer": coerce_to_string(parsed.get("stack_layer") or "Layer 5 — Application"),
+            "category": coerce_to_string(parsed.get("category") or "Engineering"),
+            "engagement_tier": coerce_to_string(parsed.get("engagement_tier") or "Full-Time"),
+            "role_summary": coerce_to_string(parsed.get("role_summary") or f"Summary for {title}"),
+            "red_flags": coerce_to_string(parsed.get("red_flags") or "None specified"),
+            "offerings": coerce_to_string(parsed.get("offerings") or "")
+        }
+    except Exception as e:
+        print(f"Failed to generate job description: {e}")
+        return {
+            "role_name": title,
+            "stack_layer": "Layer 5 — Application",
+            "category": "Engineering",
+            "engagement_tier": "Full-Time",
+            "role_summary": f"Generated summary for {title}",
+            "red_flags": "No specific red flags generated",
+            "offerings": ""
         }

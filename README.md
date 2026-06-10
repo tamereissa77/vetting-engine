@@ -6,6 +6,8 @@ A containerized talent vetting platform for sovereign AI hiring workflows. This 
 
 - Seeds **22 high-fidelity OriginCraft Talent Profiles** across infrastructure, data, model, AI reasoning, application, governance, and domain specialty layers.
 - Lets users manage talent profiles with full CRUD operations.
+- **Imports job descriptions** from PDF, DOCX, or TXT files, extracting roles and requirements automatically using Gemini.
+- **Auto-generates target talent profiles** from scratch based solely on a typed job title.
 - Accepts resume uploads in PDF/DOCX form and extracts candidate metadata using a local or cloud LLM parser.
 - Provides a mocked LinkedIn scan flow that converts a profile URL into a candidate ledger entry.
 - Runs AI-powered candidate assessment and matchmaking against one or more target profiles.
@@ -102,6 +104,8 @@ These variables can be configured in `.env` or the Docker Compose environment.
 - `POST /api/profiles` - create a new talent profile
 - `PUT /api/profiles/{profile_id}` - update a profile
 - `DELETE /api/profiles/{profile_id}` - delete a profile
+- `POST /api/profiles/import-file` - upload a PDF/DOCX/TXT job description and return extracted AI talent profile structure
+- `POST /api/profiles/generate` - auto-generate structured talent profile requirements based on a role title
 
 ### Candidate management
 

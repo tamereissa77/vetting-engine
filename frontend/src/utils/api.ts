@@ -95,6 +95,33 @@ export const api = {
     if (!res.ok) throw new Error('Failed to delete profile');
   },
 
+  async importProfileFile(file: File): Promise<TalentProfile> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_URL}/api/profiles/import-file`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to import profile from file');
+    }
+    return res.json();
+  },
+
+  async generateProfileFromTitle(title: string): Promise<TalentProfile> {
+    const res = await fetch(`${API_URL}/api/profiles/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to generate profile from title');
+    }
+    return res.json();
+  },
+
   // Candidates
   async getCandidates(): Promise<Candidate[]> {
     const res = await fetch(`${API_URL}/api/candidates`);
