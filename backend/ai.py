@@ -1,0 +1,187 @@
+import os
+import json
+import re
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+OLLAMA_API_BASE = os.getenv("OLLAMA_API_BASE", "http://host.docker.internal:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+def clean_json_string(response_text: str) -> str:
+    """Extracts the JSON substring from a text response."""
+    # Find the first occurrences of { or [ and the last occurrence of } or ]
+    match = re.search(r'(\{.*\}|\[.*\])', response_text, re.DOTALL)
+    if match:
+        return match.group(1)
+    return response_text
+
+def call_llm(prompt: str, system_prompt: str = "") -> str:
+    """Dispatches the prompt to the selected LLM provider."""
+    print(f"Calling AI Engine: Provider={LLM_PROVIDER}, Model={GEMINI_MODEL if LLM_PROVIDER == 'gemini' else (OLLAMA_MODEL if LLM_PROVIDER == 'ollama' else 'gpt-4o-mini')}")
+    try:
+        if LLM_PROVIDER == "openai" and OPENAI_API_KEY:
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                "response_format": {"type": "json_object"} if "json" in prompt.lower() else None
+            }
+            resp = requests.post(url, headers=headers, json=data, timeout=30)
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+
+        elif LLM_PROVIDER == "gemini" and GEMINI_API_KEY:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+            headers = {"Content-Type": "application/json"}
+            combined_prompt = f"{system_prompt}\n\nUser Input:\n{prompt}"
+            
+            # Use generationConfig if JSON structure requested
+            gen_config = {}
+            if "json" in prompt.lower():
+                gen_config["responseMimeType"] = "application/json"
+
+            data = {
+                "contents": [{
+                    "parts": [{"text": combined_prompt}]
+                }],
+                "generationConfig": gen_config
+            }
+            resp = requests.post(url, headers=headers, json=data, timeout=30)
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+        else: # Default: Ollama (local sovereign model)
+            url = f"{OLLAMA_API_BASE}/api/generate"
+            combined_prompt = f"{system_prompt}\n\nUser Input:\n{prompt}"
+            data = {
+                "model": OLLAMA_MODEL,
+                "prompt": combined_prompt,
+                "stream": False,
+                "format": "json" if "json" in prompt.lower() else None
+            }
+            resp = requests.post(url, json=data, timeout=30)
+            resp.raise_for_status()
+            return resp.json()["response"]
+
+    except Exception as e:
+        print(f"AI Engine failure: {e}. Falling back to default mock/heuristics.")
+        raise e
+
+def parse_cv(cv_text: str) -> dict:
+    """Parses CV text using LLM, returning candidates structure in JSON format."""
+    system_prompt = (
+        "You are an expert recruitment parser AI. "
+        "Your task is to extract structural metadata from candidate CV resumes. "
+        "Return ONLY a valid JSON object matching this structure: "
+        "{\n"
+        "  \"full_name\": \"Candidate Full Name\",\n"
+        "  \"email\": \"Candidate Email\",\n"
+        "  \"skills\": [\"Skill1\", \"Skill2\", ...],\n"
+        "  \"experience_years\": 5\n"
+        "}"
+    )
+
+    prompt = (
+        "Extract the metadata from the following resume text. "
+        "If you cannot find a specific field, return null or empty values. "
+        "For experience_years, estimate the total years of relevant experience from the timeline. "
+        "Ensure all keys are formatted exactly as instructed and the output is valid JSON.\n\n"
+        f"Resume Content:\n{cv_text}"
+    )
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "full_name": parsed.get("full_name") or "Unknown Candidate",
+            "email": parsed.get("email") or "candidate@sovereign-talent.net",
+            "skills": parsed.get("skills") or [],
+            "experience_years": parsed.get("experience_years") or 0
+        }
+    except Exception as e:
+        # Fallback heuristic parser if model fails
+        print(f"Fallback parse triggered: {e}")
+        # Extract email via regex
+        emails = re.findall(r'[\w\.-]+@[\w\.-]+', cv_text)
+        email = emails[0] if emails else "candidate@sovereign-talent.net"
+        
+        # Simple heuristics for name (take first non-empty line)
+        lines = [l.strip() for l in cv_text.split("\n") if l.strip()]
+        name = lines[0] if lines else "Unknown Candidate"
+        # Clean prefix like "Name:" or "Full Name:"
+        name = re.sub(r'^(name|full\s*name)\s*:\s*', '', name, flags=re.IGNORECASE).strip()
+        if len(name) > 50:
+            name = "Unknown Candidate"
+
+        # Guess some common keywords for skills
+        skills_keywords = ["python", "javascript", "react", "docker", "kubernetes", "aws", "postgresql", "fastapi", "git", "linux", "ai", "security"]
+        found_skills = [k for k in skills_keywords if k in cv_text.lower()]
+        
+        return {
+            "full_name": name,
+            "email": email,
+            "skills": found_skills,
+            "experience_years": 3 # default guess
+        }
+
+def assess_candidate(candidate_text: str, role_name: str, role_summary: str, red_flags: str) -> dict:
+    """Assess a candidate against a target talent profile summary and red flags."""
+    system_prompt = (
+        "You are a Senior Technical Talent Assessor. Your task is to evaluate a candidate "
+        "against a specific OriginCraft Talent Profile. "
+        "Evaluate the skills matches, skills gaps, and check for any of the listed screen-out red flags. "
+        "You must return ONLY a valid JSON object matching the following structure:\n"
+        "{\n"
+        "  \"match_score\": 75,\n"
+        "  \"skills_match\": [\"python\", \"etl\"],\n"
+        "  \"skills_gap\": [\"streaming pipelines\"],\n"
+        "  \"red_flags_detected\": [\"Only batch ETL experience\"],\n"
+        "  \"ai_verdict\": \"A detailed multi-paragraph rationale detailing the candidate's strengths, weaknesses, and decision reasoning.\"\n"
+        "}"
+    )
+
+    prompt = (
+        f"Target Profile: {role_name}\n"
+        f"Profile Summary: {role_summary}\n"
+        f"Critical Red Flags to check: {red_flags}\n\n"
+        "Evaluate this candidate against the profile. Match score must be between 0 and 100. "
+        "If the candidate's background matches any of the critical red flags, identify them in red_flags_detected and lower the score significantly. "
+        "Ensure the response is valid JSON.\n\n"
+        f"Candidate CV & Details:\n{candidate_text}"
+    )
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "match_score": int(parsed.get("match_score", 50)),
+            "skills_match": parsed.get("skills_match") or [],
+            "skills_gap": parsed.get("skills_gap") or [],
+            "red_flags_detected": parsed.get("red_flags_detected") or [],
+            "ai_verdict": parsed.get("ai_verdict") or "No detailed verdict could be generated by the model."
+        }
+    except Exception as e:
+        print(f"Fallback assessment triggered: {e}")
+        # Default mock assessment if AI fails
+        return {
+            "match_score": 60,
+            "skills_match": ["General engineering capabilities"],
+            "skills_gap": ["Specific Sovereign AI framework proficiency"],
+            "red_flags_detected": [],
+            "ai_verdict": "Fallback Match: The AI model is currently offline or unreachable. A generic baseline match has been generated. Please verify the Ollama endpoint or provider keys."
+        }

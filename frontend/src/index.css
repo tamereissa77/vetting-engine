@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #060913;
+    background-image: 
+      linear-gradient(rgba(0, 242, 254, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 242, 254, 0.02) 1px, transparent 1px);
+    background-size: 30px 30px;
+    background-position: center;
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+  }
+}
+
+/* Custom scrollbars for a clean dark look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0e17;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00f2fe;
+}
+
+/* Glassmorphism panel base class */
+.cyber-panel {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 41, 59, 0.5);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.cyber-panel-glow-cyan {
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  box-shadow: 0 0 15px rgba(0, 242, 254, 0.15);
+}
+
+.cyber-panel-glow-magenta {
+  border: 1px solid rgba(217, 70, 239, 0.3);
+  box-shadow: 0 0 15px rgba(217, 70, 239, 0.15);
+}
+
+/* Futuristic neon button pulse */
+@keyframes neon-pulse-cyan {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 242, 254, 0.4), inset 0 0 5px rgba(0, 242, 254, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(0, 242, 254, 0.8), inset 0 0 10px rgba(0, 242, 254, 0.4);
+  }
+}
+
+.btn-cyan-glow {
+  animation: neon-pulse-cyan 3s infinite;
+}
