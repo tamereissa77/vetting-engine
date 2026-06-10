@@ -44,24 +44,42 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
             return resp.json()["choices"][0]["message"]["content"]
 
         elif LLM_PROVIDER == "gemini" and GEMINI_API_KEY:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-            headers = {"Content-Type": "application/json"}
+            url = f"https://generativelanguage.googleapis.com/v1beta2/models/{GEMINI_MODEL}:generateText?key={GEMINI_API_KEY}"
+            headers = {"Content-Type": "application/json; charset=utf-8"}
             combined_prompt = f"{system_prompt}\n\nUser Input:\n{prompt}"
-            
-            # Use generationConfig if JSON structure requested
-            gen_config = {}
-            if "json" in prompt.lower():
-                gen_config["responseMimeType"] = "application/json"
 
             data = {
-                "contents": [{
-                    "parts": [{"text": combined_prompt}]
-                }],
-                "generationConfig": gen_config
+                "prompt": {
+                    "text": combined_prompt
+                },
+                "temperature": 0.2,
+                "maxOutputTokens": 1024
             }
+
             resp = requests.post(url, headers=headers, json=data, timeout=30)
             resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            body = resp.json()
+
+            if "candidates" in body and len(body["candidates"]) > 0:
+                candidate = body["candidates"][0]
+                if isinstance(candidate, dict):
+                    if "output" in candidate:
+                        return candidate["output"]
+                    if "content" in candidate:
+                        content = candidate["content"]
+                        if isinstance(content, list) and len(content) > 0:
+                            first = content[0]
+                            if isinstance(first, dict) and "text" in first:
+                                return first["text"]
+                            if isinstance(first, dict) and "parts" in first:
+                                parts = first["parts"]
+                                if isinstance(parts, list) and len(parts) > 0:
+                                    return parts[0].get("text", "")
+                    if "text" in candidate:
+                        return candidate["text"]
+
+            # Fall back to raw body text if we cannot parse the response shape.
+            return resp.text
 
         else: # Default: Ollama (local sovereign model)
             url = f"{OLLAMA_API_BASE}/api/generate"

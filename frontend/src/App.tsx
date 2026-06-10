@@ -48,10 +48,11 @@ export default function App() {
   const [isDossierModalOpen, setIsDossierModalOpen] = useState(false);
   const [systemConfig, setSystemConfig] = useState<{ provider: string; model: string } | null>(null);
   const [activeVettingProfileId, setActiveVettingProfileId] = useState<number | null>(null);
+  const [ledgerFilterQuery, setLedgerFilterQuery] = useState<string>('');
   const [registryFilterRole, setRegistryFilterRole] = useState<string>('');
   const [registryFilterMinScore, setRegistryFilterMinScore] = useState<number>(0);
   
-  // Computed state for filtered candidates
+  // Computed state for filtered candidates in the Registry tab
   const filteredCandidates = candidates.filter(candidate => {
     if (registryFilterRole && candidate.highest_role_name !== registryFilterRole) {
       return false;
@@ -60,6 +61,18 @@ export default function App() {
       return false;
     }
     return true;
+  });
+
+  // Computed candidate list for the left archive ledger panel
+  const ledgerCandidates = candidates.filter(candidate => {
+    const query = ledgerFilterQuery.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      candidate.full_name,
+      candidate.email || '',
+      candidate.linkedin_url || '',
+      candidate.highest_role_name || ''
+    ].some(value => value.toLowerCase().includes(query));
   });
   
   // WebSocket Progress states
@@ -336,7 +349,7 @@ export default function App() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-wider uppercase bg-gradient-to-r from-cyber-cyan to-cyber-magenta bg-clip-text text-transparent">
-              OriginCraft Sovereign Vetting Engine
+              Click group - VITTING ENGINE
             </h1>
             <p className="text-[10px] tracking-widest font-mono text-slate-400">
               LOCAL COMPLIANCE ARCHITECTURE & DECOUPLED PIPELINE
@@ -453,6 +466,9 @@ export default function App() {
             <div>Database: Postgres v15</div>
             <div>Security: Local Sandbox</div>
             <div>Region: Air-Gapped Jurisdiction</div>
+            <div className="pt-2 text-slate-400 border-t border-cyber-slate/20 text-[9px] uppercase tracking-widest">
+              Developed by OriginCraft
+            </div>
           </div>
         </aside>
 
@@ -638,11 +654,36 @@ export default function App() {
                 {/* Left Candidates List (4 cols) */}
                 <div className="lg:col-span-4 space-y-4">
                   <div className="cyber-panel rounded-lg p-4">
-                    <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 border-b border-cyber-slate/30 pb-2 mb-3">
-                      Candidate Archive Ledger
-                    </h3>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300">
+                          Candidate Archive Ledger
+                        </h3>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {ledgerCandidates.length} / {candidates.length}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="search"
+                          value={ledgerFilterQuery}
+                          onChange={(e) => setLedgerFilterQuery(e.target.value)}
+                          placeholder="Filter by name, role, email or LinkedIn"
+                          className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-2 text-xs text-slate-200 rounded font-mono"
+                        />
+                        {ledgerFilterQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setLedgerFilterQuery('')}
+                            className="px-3 py-2 bg-cyber-slate border border-cyber-slate/50 text-slate-300 rounded text-[10px] font-mono hover:bg-cyber-slate/80 transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                      {candidates.map((c) => {
+                      {ledgerCandidates.map((c) => {
                         const isSelected = selectedCandidateId === c.id;
                         return (
                           <button

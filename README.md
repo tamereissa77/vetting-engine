@@ -21,6 +21,12 @@ The application is orchestrated with `docker-compose.yml` and includes:
 - `redis`: Redis broker for Celery and Pub/Sub progress updates.
 - `db`: PostgreSQL for persistent talent profiles, candidate records, and assessment history.
 
+## Database persistence
+
+The PostgreSQL service is configured with a Docker named volume (`postgres_data`) mounted at `/var/lib/postgresql/data`. This means your candidate and profile data will survive container restarts and rebuilds as long as the volume is kept.
+
+> Warning: running `docker-compose down -v` will remove the database volume and erase persisted data.
+
 ## Tech stack
 
 - Backend: Python, FastAPI, Celery, SQLAlchemy, PostgreSQL, Redis

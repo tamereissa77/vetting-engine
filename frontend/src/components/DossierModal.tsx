@@ -366,7 +366,7 @@ export const DossierModal: React.FC<DossierModalProps> = ({
 
               {/* Dossier info */}
               <div className="flex-1 min-h-0 bg-cyber-dark/80 border border-cyber-slate/60 p-4 rounded-lg font-mono text-xs text-slate-300 overflow-y-auto whitespace-pre-line leading-relaxed shadow-inner">
-                {candidateDetails.cv_raw_text || 'No raw source document registered for this candidate ledger.'}
+                {candidateDetails.cv_raw_text?.replace(/\(mockup\)/gi, '').trim() || 'No raw source document registered for this candidate ledger.'}
               </div>
 
               <div className="shrink-0 p-3.5 bg-cyber-gray/40 border border-cyber-slate/30 rounded-lg">
