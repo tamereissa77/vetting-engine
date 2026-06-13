@@ -66,6 +66,19 @@ export default function App() {
 
   const [expandedProfiles, setExpandedProfiles] = useState<Record<number, boolean>>({});
   const [expandedCandidates, setExpandedCandidates] = useState<Record<number, boolean>>({});
+  const [profileSearchQuery, setProfileSearchQuery] = useState('');
+
+  // Computed state for filtered talent profiles
+  const filteredProfiles = profiles.filter((profile) => {
+    const query = profileSearchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      profile.role_name.toLowerCase().includes(query) ||
+      profile.role_summary.toLowerCase().includes(query) ||
+      profile.category.toLowerCase().includes(query) ||
+      profile.stack_layer.toLowerCase().includes(query)
+    );
+  });
 
   const toggleProfileExpanded = (id: number) => {
     setExpandedProfiles((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -527,7 +540,7 @@ export default function App() {
           {/* TAB 1: Profiles CRUD Admin Dashboard */}
           {activeTab === 'profiles' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold font-sans text-slate-100 flex items-center gap-2">
                     <span>📋</span>
@@ -537,7 +550,28 @@ export default function App() {
                     Admin register for vetting benchmarks and requirements criteria.
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Search Bar */}
+                  <div className="flex gap-2">
+                    <input
+                      type="search"
+                      value={profileSearchQuery}
+                      onChange={(e) => setProfileSearchQuery(e.target.value)}
+                      placeholder="Search profiles by title, summary..."
+                      className="bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-2 text-xs text-slate-200 rounded font-mono w-60 transition-colors"
+                    />
+                    {profileSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setProfileSearchQuery('')}
+                        className="px-3 py-2 bg-cyber-slate border border-cyber-slate/50 text-slate-300 rounded text-[10px] font-mono hover:bg-cyber-slate/80 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Expand/Collapse All */}
                   <div className="flex items-center bg-cyber-dark border border-cyber-slate/50 rounded p-1 font-mono text-[10px]">
                     <button
                       onClick={expandAllProfiles}
@@ -553,6 +587,8 @@ export default function App() {
                       Collapse All
                     </button>
                   </div>
+                  
+                  {/* Add Target Role */}
                   <button
                     onClick={() => {
                       setModalInitialProfile(null);
@@ -568,7 +604,7 @@ export default function App() {
 
               {/* Profiles Grid */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-                {profiles.map((profile) => {
+                {filteredProfiles.map((profile) => {
                   const isExpanded = !!expandedProfiles[profile.id!];
                   return (
                     <div 
@@ -666,13 +702,19 @@ export default function App() {
                   );
                 })}
 
-                {profiles.length === 0 && (
+                {profiles.length === 0 ? (
                   <div className="col-span-full py-16 text-center border border-dashed border-cyber-slate rounded-lg">
                     <p className="text-sm font-mono text-slate-400">
                       No talent profiles found matching filter layer. Add new target role above.
                     </p>
                   </div>
-                )}
+                ) : filteredProfiles.length === 0 ? (
+                  <div className="col-span-full py-16 text-center border border-dashed border-cyber-slate rounded-lg bg-cyber-magenta/5 border-cyber-magenta/20">
+                    <p className="text-sm font-mono text-cyber-magenta">
+                      No profiles match the search query. Adjust the query to filter again.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}
