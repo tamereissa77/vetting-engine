@@ -256,6 +256,33 @@ export default function App() {
     );
   });
 
+  // Computed dynamic matched profiles and missing gaps for SOW Planner
+  const plannerMatchedProfiles = (() => {
+    if (!plannerResults) return [];
+    const list = [...plannerResults.matched_profiles];
+    const missing = plannerResults.missing_profiles || [];
+    missing.forEach((mp) => {
+      const activeProf = profiles.find((p) => p.role_name === mp.role_name);
+      if (activeProf) {
+        const alreadyMatched = list.some((m) => m.role_name === mp.role_name);
+        if (!alreadyMatched) {
+          list.push({
+            id: activeProf.id!,
+            role_name: mp.role_name,
+            relevance_reason: `Newly added: ${mp.role_summary || 'Identified missing gap successfully imported to ledger.'}`
+          });
+        }
+      }
+    });
+    return list;
+  })();
+
+  const plannerMissingProfiles = (() => {
+    if (!plannerResults) return [];
+    const missing = plannerResults.missing_profiles || [];
+    return missing.filter((mp) => !profiles.some((p) => p.role_name === mp.role_name));
+  })();
+
   const toggleProfileExpanded = (id: number) => {
     setExpandedProfiles((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -1880,11 +1907,11 @@ export default function App() {
                       <div className="cyber-panel rounded-lg p-5 space-y-4">
                         <h3 className="text-xs font-mono uppercase tracking-wider text-cyber-cyan flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
                           <CheckCircle2 size={14} />
-                          <span>Matched Talent Profiles ({plannerResults.matched_profiles.length})</span>
+                          <span>Matched Talent Profiles ({plannerMatchedProfiles.length})</span>
                         </h3>
                         
                         <div className="space-y-2">
-                          {plannerResults.matched_profiles.map((match) => (
+                          {plannerMatchedProfiles.map((match) => (
                             <div key={match.id} className="p-3 bg-cyber-dark/50 border border-cyber-slate/40 rounded flex flex-col gap-3 items-start w-full">
                               <div className="flex flex-col md:flex-row justify-between gap-3 items-start md:items-center w-full">
                                 <div className="flex-1">
@@ -1968,7 +1995,7 @@ export default function App() {
                             </div>
                           ))}
 
-                          {plannerResults.matched_profiles.length === 0 && (
+                          {plannerMatchedProfiles.length === 0 && (
                             <p className="text-xs font-sans text-slate-500 italic py-4">No matching active profiles found for this scope.</p>
                           )}
                         </div>
@@ -1979,15 +2006,14 @@ export default function App() {
                         <div className="flex items-center justify-between border-b border-cyber-slate/30 pb-2">
                           <h3 className="text-xs font-mono uppercase tracking-wider text-cyber-magenta flex items-center gap-1.5">
                             <AlertCircle size={14} />
-                            <span>Missing Profile Gaps ({plannerResults.missing_profiles.length})</span>
+                            <span>Missing Profile Gaps ({plannerMissingProfiles.length})</span>
                           </h3>
                           
-                          {plannerResults.missing_profiles.length > 0 && (
+                          {plannerMissingProfiles.length > 0 && (
                             <button
                               type="button"
                               onClick={handleAddAllMissingProfiles}
-                              disabled={plannerResults.missing_profiles.every((p) => addedProfileNames.includes(p.role_name))}
-                              className="px-2.5 py-1 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta text-cyber-magenta hover:text-white disabled:opacity-40 disabled:pointer-events-none rounded font-mono text-[9px] uppercase tracking-wider transition-all"
+                              className="px-2.5 py-1 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all"
                             >
                               Add All to Ledger
                             </button>
@@ -1995,8 +2021,7 @@ export default function App() {
                         </div>
 
                         <div className="space-y-4">
-                          {plannerResults.missing_profiles.map((p, idx) => {
-                            const isAdded = addedProfileNames.includes(p.role_name);
+                          {plannerMissingProfiles.map((p, idx) => {
                             return (
                               <div key={idx} className="p-4 bg-cyber-dark/30 border border-cyber-slate/50 rounded-lg flex flex-col justify-between gap-4">
                                 <div>
@@ -2015,14 +2040,9 @@ export default function App() {
                                     <button
                                       type="button"
                                       onClick={() => handleAddMissingProfile(p)}
-                                      disabled={isAdded}
-                                      className={`px-3 py-1 text-[9px] font-mono uppercase tracking-wider rounded border transition-all ${
-                                        isAdded
-                                          ? 'bg-cyber-green/10 border-cyber-green/30 text-cyber-green cursor-not-allowed'
-                                          : 'bg-cyber-magenta/10 border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20 hover:text-white'
-                                      }`}
+                                      className="bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20 hover:text-white px-3 py-1 text-[9px] font-mono uppercase tracking-wider rounded border transition-all"
                                     >
-                                      {isAdded ? '✓ Added' : '+ Add to Ledger'}
+                                      + Add to Ledger
                                     </button>
                                   </div>
 
@@ -2173,9 +2193,31 @@ export default function App() {
                       );
                     }
                     
-                    const matched = activeProject.analysis_results?.matched_profiles || [];
-                    const missing = activeProject.analysis_results?.missing_profiles || [];
                     const assignedResources = candidates.filter(c => c.assigned_project_id === activeProject.id);
+
+                    // Dynamic requirements mapping for the active project
+                    const projectMatchedProfiles = (() => {
+                      const list = [...(activeProject.analysis_results?.matched_profiles || [])];
+                      const projectMissing = activeProject.analysis_results?.missing_profiles || [];
+                      projectMissing.forEach((mp) => {
+                        const activeProf = profiles.find((p) => p.role_name === mp.role_name);
+                        if (activeProf) {
+                          const alreadyMatched = list.some((m) => m.role_name === mp.role_name);
+                          if (!alreadyMatched) {
+                            list.push({
+                              id: activeProf.id!,
+                              role_name: mp.role_name,
+                              relevance_reason: `Newly added: ${mp.role_summary || 'Identified missing gap successfully imported to ledger.'}`
+                            });
+                          }
+                        }
+                      });
+                      return list;
+                    })();
+
+                    const projectMissingProfiles = (activeProject.analysis_results?.missing_profiles || []).filter(
+                      (mp) => !profiles.some((p) => p.role_name === mp.role_name)
+                    );
                     
                     return (
                       <div className="space-y-6">
@@ -2271,10 +2313,10 @@ export default function App() {
                           {/* Matched roles list */}
                           <div className="space-y-3">
                             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-                              SOW Matched Profiles ({matched.length})
+                              SOW Matched Profiles ({projectMatchedProfiles.length})
                             </span>
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                              {matched.map((m: any, idx: number) => (
+                              {projectMatchedProfiles.map((m: any, idx: number) => (
                                 <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg">
                                   <h4 className="text-[11px] font-bold text-slate-200">{m.role_name}</h4>
                                   <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">
@@ -2282,7 +2324,7 @@ export default function App() {
                                   </p>
                                 </div>
                               ))}
-                              {matched.length === 0 && (
+                              {projectMatchedProfiles.length === 0 && (
                                 <div className="text-[10px] text-slate-500 italic p-3 text-center">
                                   No matched profiles.
                                 </div>
@@ -2293,11 +2335,10 @@ export default function App() {
                           {/* Missing roles gaps list */}
                           <div className="space-y-3">
                             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-                              Identified Missing Gaps ({missing.length})
+                              Identified Missing Gaps ({projectMissingProfiles.length})
                             </span>
                             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                              {missing.map((mis: any, idx: number) => {
-                                const isAdded = profiles.some(p => p.role_name === mis.role_name);
+                              {projectMissingProfiles.map((mis: any, idx: number) => {
                                 return (
                                   <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg flex justify-between items-start gap-2">
                                     <div className="flex-1">
@@ -2311,7 +2352,6 @@ export default function App() {
                                     </div>
                                     <button
                                       type="button"
-                                      disabled={isAdded}
                                       onClick={async () => {
                                         try {
                                           await api.createProfile(mis);
@@ -2320,18 +2360,14 @@ export default function App() {
                                           alert('Failed to add profile: ' + err);
                                         }
                                       }}
-                                      className={`px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider rounded border transition-all shrink-0 font-bold ${
-                                        isAdded 
-                                          ? 'border-cyber-green/35 text-cyber-green bg-cyber-green/10'
-                                          : 'border-cyber-cyan/35 text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan/20'
-                                      }`}
+                                      className="px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider rounded border border-cyber-cyan/35 text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan/20 transition-all shrink-0 font-bold"
                                     >
-                                      {isAdded ? 'Added' : 'Add'}
+                                      Add
                                     </button>
                                   </div>
                                 );
                               })}
-                              {missing.length === 0 && (
+                              {projectMissingProfiles.length === 0 && (
                                 <div className="text-[10px] text-slate-500 italic p-3 text-center">
                                   No missing profile gaps identified.
                                 </div>
