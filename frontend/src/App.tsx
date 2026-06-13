@@ -6,7 +6,7 @@ import {
    UserX, UserCheck, ClipboardList, AlertCircle,
    ChevronDown, ChevronUp
  } from 'lucide-react';
-import { api, TalentProfile, Candidate, CandidateDetails } from './utils/api';
+import { api, TalentProfile, Candidate, CandidateDetails, Project } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
 import { ProfileModal } from './components/ProfileModal';
 import { CandidateModal } from './components/CandidateModal';
@@ -40,6 +40,92 @@ export default function App() {
   const [isPlannerLoading, setIsPlannerLoading] = useState(false);
   const [addedProfileNames, setAddedProfileNames] = useState<string[]>([]);
   const [plannerDragActive, setPlannerDragActive] = useState(false);
+
+  // Project States
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [projectName, setProjectName] = useState('');
+  const [isSavingProject, setIsSavingProject] = useState(false);
+
+  const fetchProjects = async () => {
+    try {
+      const data = await api.listProjects();
+      setProjects(data);
+    } catch (err) {
+      console.error('Failed to fetch projects:', err);
+    }
+  };
+
+  const handleLoadProject = (projectId: number | null, allProjectsList?: Project[]) => {
+    const list = allProjectsList || projects;
+    if (!projectId) {
+      setSelectedProjectId(null);
+      setSowText('');
+      setSowFile(null);
+      setPlannerResults(null);
+      setProjectName('');
+      setAddedProfileNames([]);
+      return;
+    }
+    const project = list.find((p) => p.id === projectId);
+    if (!project) return;
+    setSelectedProjectId(project.id);
+    setSowText(project.sow_text || '');
+    setSowFile(null);
+    setPlannerResults(project.analysis_results);
+    setProjectName(project.name);
+    
+    // Check which missing profiles already exist in the active ledger
+    const existingNames = profiles.map((p) => p.role_name);
+    const missing = project.analysis_results.missing_profiles || [];
+    const alreadyAdded = missing
+      .filter((mp: TalentProfile) => existingNames.includes(mp.role_name))
+      .map((mp: TalentProfile) => mp.role_name);
+    setAddedProfileNames(alreadyAdded);
+  };
+
+  const handleSaveProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectName.trim()) {
+      alert('Please enter a project name.');
+      return;
+    }
+    if (!plannerResults) {
+      alert('No SOW analysis results to save.');
+      return;
+    }
+    setIsSavingProject(true);
+    try {
+      const payload = {
+        name: projectName.trim(),
+        sow_text: sowText,
+        sow_filename: sowFile ? sowFile.name : (selectedProjectId ? (projects.find(p => p.id === selectedProjectId)?.sow_filename || '') : ''),
+        analysis_results: plannerResults
+      };
+      const saved = await api.createProject(payload);
+      await fetchProjects();
+      setSelectedProjectId(saved.id);
+      alert('Project workspace saved successfully!');
+    } catch (err: any) {
+      alert(`Failed to save project: ${err.message || err}`);
+    } finally {
+      setIsSavingProject(false);
+    }
+  };
+
+  const handleDeleteProject = async (projectId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this project?')) return;
+    try {
+      await api.deleteProject(projectId);
+      await fetchProjects();
+      if (selectedProjectId === projectId) {
+        handleLoadProject(null);
+      }
+    } catch (err: any) {
+      alert(`Failed to delete project: ${err.message || err}`);
+    }
+  };
 
   const handleAnalyzeScope = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,6 +287,7 @@ export default function App() {
 
   useEffect(() => {
     fetchSystemConfig();
+    fetchProjects();
   }, []);
 
   const fetchSystemConfig = async () => {
@@ -1560,14 +1647,56 @@ export default function App() {
           {/* TAB 4: SOW Project Planner */}
           {activeTab === 'planner' && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold font-sans text-slate-100 flex items-center gap-2">
-                  <span>🎯</span>
-                  Project SOW Planner & Gap Identifier
-                </h2>
-                <p className="text-xs text-slate-400 mt-1 font-mono">
-                  Upload project Scope of Work (SOW) documents to audit active ledger gaps and match talent requirements.
-                </p>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cyber-slate/20 pb-4 mb-4">
+                <div>
+                  <h2 className="text-xl font-bold font-sans text-slate-100 flex items-center gap-2">
+                    <span>🎯</span>
+                    Project SOW Planner & Gap Identifier
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1 font-mono">
+                    Upload project Scope of Work (SOW) documents to audit active ledger gaps and match talent requirements.
+                  </p>
+                </div>
+
+                {/* Project Workspace Management */}
+                <div className="flex items-center gap-3 bg-cyber-dark/85 border border-cyber-slate/50 p-2.5 rounded-lg backdrop-blur-md self-start md:self-center">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-slate-400">Load Project Workspace</span>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={selectedProjectId || ''}
+                        onChange={(e) => handleLoadProject(e.target.value ? Number(e.target.value) : null)}
+                        className="bg-cyber-gray border border-cyber-slate text-slate-200 text-xs rounded px-3 py-1.5 font-mono focus:outline-none focus:border-cyber-cyan/60 transition-colors w-48"
+                      >
+                        <option value="">-- Start New Project --</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      {selectedProjectId && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteProject(selectedProjectId, e)}
+                          className="p-1.5 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta text-cyber-magenta hover:text-white rounded transition-colors"
+                          title="Delete Project Workspace"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleLoadProject(null)}
+                    className="px-2.5 py-1.5 bg-cyber-slate border border-cyber-slate/50 text-slate-300 rounded text-[9px] font-mono hover:bg-cyber-slate/85 transition-colors self-end"
+                  >
+                    Reset
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1661,6 +1790,33 @@ export default function App() {
                   {plannerResults ? (
                     <div className="space-y-6">
                       
+                      {/* Save Project Card */}
+                      <form onSubmit={handleSaveProject} className="cyber-panel rounded-lg p-4 border border-cyber-cyan/30 bg-cyber-cyan/5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <h4 className="text-xs font-mono uppercase tracking-wider text-cyber-cyan flex items-center gap-1.5 mb-1.5">
+                            <span>💾</span>
+                            {selectedProjectId ? 'Update Project Workspace' : 'Save Project Workspace'}
+                          </h4>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={projectName}
+                              onChange={(e) => setProjectName(e.target.value)}
+                              placeholder="e.g., Arabic AI Legal Agent Suite"
+                              className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isSavingProject}
+                          className="px-4 py-2 bg-cyber-cyan/20 hover:bg-cyber-cyan/35 border border-cyber-cyan text-cyber-cyan hover:text-white rounded font-mono text-xs uppercase tracking-wider transition-all self-end md:self-auto shrink-0"
+                        >
+                          {isSavingProject ? 'Saving...' : (selectedProjectId ? 'Overwrite Workspace' : 'Save Workspace')}
+                        </button>
+                      </form>
+
                       {/* Matched Profiles Section */}
                       <div className="cyber-panel rounded-lg p-5 space-y-4">
                         <h3 className="text-xs font-mono uppercase tracking-wider text-cyber-cyan flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">

@@ -1,7 +1,8 @@
 import os
 import json
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 from fastapi import FastAPI, Depends, File, UploadFile, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -58,6 +59,25 @@ class CandidateCreateUpdateSchema(BaseModel):
     skills: List[str] = []
     experience_years: Optional[int] = 0
     is_blacklisted: Optional[bool] = False
+
+
+class ProjectCreateSchema(BaseModel):
+    name: str
+    sow_text: Optional[str] = None
+    sow_filename: Optional[str] = None
+    analysis_results: Dict[str, Any]
+
+
+class ProjectSchema(BaseModel):
+    id: int
+    name: str
+    sow_text: Optional[str] = None
+    sow_filename: Optional[str] = None
+    analysis_results: Dict[str, Any]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # Endpoints
@@ -500,3 +520,42 @@ async def analyze_project_scope(
     import ai
     analysis = ai.analyze_project_scope_text(text_content, profiles_list)
     return analysis
+
+
+# Projects CRUD Endpoints
+
+@app.get("/api/projects", response_model=List[ProjectSchema])
+def get_projects(database: Session = Depends(db.get_db)):
+    return database.query(db.Project).order_by(db.Project.created_at.desc()).all()
+
+
+@app.get("/api/projects/{project_id}", response_model=ProjectSchema)
+def get_project(project_id: int, database: Session = Depends(db.get_db)):
+    project = database.query(db.Project).filter(db.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.post("/api/projects", response_model=ProjectSchema)
+def create_project(project_in: ProjectCreateSchema, database: Session = Depends(db.get_db)):
+    project = db.Project(
+        name=project_in.name,
+        sow_text=project_in.sow_text,
+        sow_filename=project_in.sow_filename,
+        analysis_results=project_in.analysis_results
+    )
+    database.add(project)
+    database.commit()
+    database.refresh(project)
+    return project
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: int, database: Session = Depends(db.get_db)):
+    project = database.query(db.Project).filter(db.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    database.delete(project)
+    database.commit()
+    return {"message": f"Project {project_id} deleted successfully"}

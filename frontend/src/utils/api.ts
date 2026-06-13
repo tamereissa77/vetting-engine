@@ -50,6 +50,18 @@ export interface TaskProgress {
   data?: any;
 }
 
+export interface Project {
+  id: number;
+  name: string;
+  sow_text?: string;
+  sow_filename?: string;
+  analysis_results: {
+    matched_profiles: Array<{ id: number; role_name: string; relevance_reason: string }>;
+    missing_profiles: TalentProfile[];
+  };
+  created_at: string;
+}
+
 export const api = {
   // Profiles CRUD
   async getProfiles(stackLayer?: string): Promise<TalentProfile[]> {
@@ -235,5 +247,42 @@ export const api = {
       throw new Error(error.detail || 'Failed to analyze project scope');
     }
     return res.json();
+  },
+
+  async listProjects(): Promise<Project[]> {
+    const res = await fetch(`${API_URL}/api/projects`);
+    if (!res.ok) throw new Error('Failed to fetch projects');
+    return res.json();
+  },
+
+  async getProject(id: number): Promise<Project> {
+    const res = await fetch(`${API_URL}/api/projects/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch project');
+    return res.json();
+  },
+
+  async createProject(project: {
+    name: string;
+    sow_text?: string;
+    sow_filename?: string;
+    analysis_results: any;
+  }): Promise<Project> {
+    const res = await fetch(`${API_URL}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to save project');
+    }
+    return res.json();
+  },
+
+  async deleteProject(id: number): Promise<void> {
+    const res = await fetch(`${API_URL}/api/projects/${id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete project');
   }
 };

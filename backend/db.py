@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, Boolean, JSON
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
@@ -70,6 +70,17 @@ class Assessment(Base):
 
     candidate = relationship("Candidate", back_populates="assessments")
     profile = relationship("TalentProfile", back_populates="assessments")
+
+
+class Project(Base):
+    __tablename__ = 'projects'
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    sow_text = Column(Text, nullable=True)
+    sow_filename = Column(String(255), nullable=True)
+    analysis_results = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # DB Session dependency

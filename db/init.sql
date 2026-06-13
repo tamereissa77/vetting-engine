@@ -37,3 +37,13 @@ CREATE TABLE IF NOT EXISTS assessments (
     ai_verdict TEXT,                    -- Multi-paragraph detailed analysis and decision rationale
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 4. SOW Projects Table
+CREATE TABLE IF NOT EXISTS projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    sow_text TEXT,
+    sow_filename VARCHAR(255),
+    analysis_results JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

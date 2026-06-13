@@ -1,5 +1,5 @@
 import json
-from db import SessionLocal, TalentProfile
+from db import SessionLocal, TalentProfile, Base, engine
 
 PROFILES_DATA = [
   {
@@ -181,6 +181,8 @@ PROFILES_DATA = [
 ]
 
 def seed_database():
+    print("Creating database tables if missing...")
+    Base.metadata.create_all(bind=engine)
     print("Seeding database with OriginCraft Talent Profiles...")
     db = SessionLocal()
     try:
