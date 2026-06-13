@@ -189,10 +189,40 @@ def seed_database():
     db = SessionLocal()
     try:
         db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assigned_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS contact_number VARCHAR(100);"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS notes TEXT;"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assigned_profile_id INTEGER REFERENCES talent_profiles(id) ON DELETE SET NULL;"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assignment_start_date DATE;"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assignment_end_date DATE;"))
+        db.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS is_disqualified BOOLEAN DEFAULT FALSE;"))
+        # Create multi-slot assignments table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS candidate_assignments (
+                id SERIAL PRIMARY KEY,
+                candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                profile_id INTEGER REFERENCES talent_profiles(id) ON DELETE SET NULL,
+                start_date DATE,
+                end_date DATE,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        # Migrate existing single-slot assignments to the new table
+        db.execute(text("""
+            INSERT INTO candidate_assignments (candidate_id, project_id, profile_id, start_date, end_date)
+            SELECT id, assigned_project_id, assigned_profile_id, assignment_start_date, assignment_end_date
+            FROM candidates
+            WHERE assigned_project_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM candidate_assignments ca
+                WHERE ca.candidate_id = candidates.id
+                AND ca.project_id = candidates.assigned_project_id
+            );
+        """))
         db.commit()
-        print("Ensured candidates.assigned_project_id column exists.")
+        print("Ensured candidates columns (assigned_project_id, contact_number, notes, assigned_profile_id, assignment_start_date, assignment_end_date) and assessments.is_disqualified exist.")
     except Exception as e:
-        print(f"Error checking/creating candidates.assigned_project_id: {e}")
+        print(f"Error checking/creating candidate columns: {e}")
         db.rollback()
     finally:
         db.close()

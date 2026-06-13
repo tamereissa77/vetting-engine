@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, Boolean, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, Boolean, JSON, Date
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from dotenv import load_dotenv
 
@@ -50,11 +50,34 @@ class Candidate(Base):
     skills = Column(ARRAY(String), default=[], server_default='{}')
     experience_years = Column(Integer, nullable=True)
     is_blacklisted = Column(Boolean, default=False)
+    contact_number = Column(String(100), nullable=True)
+    notes = Column(Text, nullable=True)
     assigned_project_id = Column(Integer, ForeignKey('projects.id', ondelete='SET NULL'), nullable=True)
+    assigned_profile_id = Column(Integer, ForeignKey('talent_profiles.id', ondelete='SET NULL'), nullable=True)
+    assignment_start_date = Column(Date, nullable=True)
+    assignment_end_date = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     assessments = relationship("Assessment", back_populates="candidate", cascade="all, delete-orphan")
     assigned_project = relationship("Project", foreign_keys=[assigned_project_id])
+    assigned_profile = relationship("TalentProfile", foreign_keys=[assigned_profile_id])
+    candidate_assignments = relationship("CandidateAssignment", back_populates="candidate", cascade="all, delete-orphan")
+
+
+class CandidateAssignment(Base):
+    __tablename__ = 'candidate_assignments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(Integer, ForeignKey('candidates.id', ondelete='CASCADE'), nullable=False)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    profile_id = Column(Integer, ForeignKey('talent_profiles.id', ondelete='SET NULL'), nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    candidate = relationship("Candidate", back_populates="candidate_assignments")
+    project = relationship("Project", foreign_keys=[project_id])
+    profile = relationship("TalentProfile", foreign_keys=[profile_id])
 
 
 class Assessment(Base):
@@ -68,6 +91,7 @@ class Assessment(Base):
     skills_gap = Column(ARRAY(String), default=[], server_default='{}')
     red_flags_detected = Column(ARRAY(String), default=[], server_default='{}')
     ai_verdict = Column(Text, nullable=True)
+    is_disqualified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     candidate = relationship("Candidate", back_populates="assessments")

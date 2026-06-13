@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-   Shield, Activity, Database, Cpu, Layers, Terminal, Plus, 
-   Trash2, Edit, UploadCloud, Linkedin, CheckCircle2, 
+   Shield, Activity, Database, Cpu, Layers, Terminal, Plus,
+   Trash2, Edit, UploadCloud, Linkedin, CheckCircle2,
    AlertTriangle, User, Mail, FileText, Sparkles, Network,
    UserX, UserCheck, ClipboardList, AlertCircle,
-   ChevronDown, ChevronUp
+   ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X
  } from 'lucide-react';
-import { api, TalentProfile, Candidate, CandidateDetails, Project } from './utils/api';
+import { api, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
 import { ProfileModal } from './components/ProfileModal';
 import { CandidateModal } from './components/CandidateModal';
@@ -27,7 +27,7 @@ const STACK_LAYERS_FILTER = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner' | 'projects'>('profiles');
+  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner' | 'projects' | 'utilization'>('profiles');
   const [selectedLayer, setSelectedLayer] = useState<string>('');
 
   // SOW Planner States
@@ -128,31 +128,54 @@ export default function App() {
     }
   };
 
-  const handleAssignCandidate = async (projectId: number, candidateId: number) => {
+  // Assignment date modal state
+  const [assignModal, setAssignModal] = useState<{
+    candidateId: number;
+    candidateName: string;
+    projectId: number;
+    profileId: number | undefined;
+    profileName: string;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
+
+  const handleAssignCandidate = async (projectId: number, candidateId: number, profileId?: number, startDate?: string, endDate?: string) => {
     try {
-      await api.assignCandidateToProject(projectId, candidateId);
+      await api.assignCandidateToProject(projectId, candidateId, profileId, startDate, endDate);
       fetchCandidates();
       if (selectedProjectId) {
         const list = await api.listProjects();
         setProjects(list);
         handleLoadProject(selectedProjectId, list);
       }
+      if (activeTab === 'utilization') fetchUtilization();
     } catch (err: any) {
       alert(err.message || 'Failed to assign candidate');
     }
   };
 
-  const handleReleaseCandidate = async (candidateId: number) => {
+  const handleConfirmAssign = async () => {
+    if (!assignModal) return;
+    await handleAssignCandidate(
+      assignModal.projectId,
+      assignModal.candidateId,
+      assignModal.profileId,
+      assignModal.startDate || undefined,
+      assignModal.endDate || undefined,
+    );
+    setAssignModal(null);
+  };
+
+  const handleReleaseAssignment = async (assignmentId: number) => {
     try {
-      await api.releaseCandidateFromProject(candidateId);
+      await api.releaseAssignment(assignmentId);
       fetchCandidates();
-      if (selectedProjectId) {
-        const list = await api.listProjects();
-        setProjects(list);
-        handleLoadProject(selectedProjectId, list);
-      }
+      const list = await api.listProjects();
+      setProjects(list);
+      if (selectedProjectId) handleLoadProject(selectedProjectId, list);
+      if (activeTab === 'utilization') fetchUtilization();
     } catch (err: any) {
-      alert(err.message || 'Failed to release candidate');
+      alert(err.message || 'Failed to release assignment');
     }
   };
 
@@ -228,14 +251,30 @@ export default function App() {
   const [ledgerFilterQuery, setLedgerFilterQuery] = useState<string>('');
   const [registryFilterRole, setRegistryFilterRole] = useState<string>('');
   const [registryFilterMinScore, setRegistryFilterMinScore] = useState<number>(0);
+
+  // Delete confirmation modal state
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    candidateId: number | null;
+    candidateName: string;
+    message: string;
+    canProceed: boolean;
+  }>({ isOpen: false, candidateId: null, candidateName: '', message: '', canProceed: false });
   
   // Computed state for filtered candidates in the Registry tab
-  const filteredCandidates = candidates.filter(candidate => {
-    if (registryFilterRole && candidate.highest_role_name !== registryFilterRole) {
-      return false;
-    }
-    if (registryFilterMinScore > 0 && (candidate.highest_score ?? 0) < registryFilterMinScore) {
-      return false;
+  const filteredCandidates = candidates.filter((candidate) => {
+    if (registryFilterRole) {
+      const activeAssessment = candidate.assessments?.find((a) => a.role_name === registryFilterRole);
+      if (!activeAssessment) {
+        return false;
+      }
+      if (registryFilterMinScore > 0 && activeAssessment.match_score < registryFilterMinScore) {
+        return false;
+      }
+    } else {
+      if (registryFilterMinScore > 0 && (candidate.highest_score ?? 0) < registryFilterMinScore) {
+        return false;
+      }
     }
     return true;
   });
@@ -345,6 +384,32 @@ export default function App() {
     fetchSystemConfig();
     fetchProjects();
   }, []);
+
+  // Utilization state
+  const [utilData, setUtilData] = useState<UtilizationData | null>(null);
+  const [utilLoading, setUtilLoading] = useState(false);
+  const [expandedUtilCandidates, setExpandedUtilCandidates] = useState<Set<number>>(new Set());
+  const toggleUtilCandidate = (id: number) => setExpandedUtilCandidates(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const fetchUtilization = async () => {
+    setUtilLoading(true);
+    try {
+      const data = await api.getUtilization();
+      setUtilData(data);
+    } catch (err) {
+      console.error('Failed to fetch utilization data:', err);
+    } finally {
+      setUtilLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'utilization') fetchUtilization();
+  }, [activeTab]);
 
   const fetchSystemConfig = async () => {
     try {
@@ -456,16 +521,48 @@ export default function App() {
     }
   };
 
-  const handleDeleteCandidate = async (id: number) => {
-    if (!window.confirm('Are you sure you want to purge this candidate from ledger?')) return;
+  const handleDeleteCandidate = (id: number) => {
+    const candidate = candidates.find(c => c.id === id);
+    const name = candidate?.full_name || 'Unknown';
+    if (candidate && (candidate.assignments || []).length > 0) {
+      const projectNames = [...new Set((candidate.assignments || []).map(a => a.project_name).filter(Boolean))].join(', ');
+      setDeleteConfirm({
+        isOpen: true,
+        candidateId: null,
+        candidateName: name,
+        message: `This candidate has active assignments in: ${projectNames || 'a project'}. Please release all assignments first, then try again.`,
+        canProceed: false,
+      });
+      return;
+    }
+    setDeleteConfirm({
+      isOpen: true,
+      candidateId: id,
+      candidateName: name,
+      message: `You are about to delete "${name}" from the archive ledger. This action cannot be undone. Are you sure?`,
+      canProceed: true,
+    });
+  };
+
+  const confirmDeleteCandidate = async () => {
+    const id = deleteConfirm.candidateId;
+    setDeleteConfirm({ isOpen: false, candidateId: null, candidateName: '', message: '', canProceed: false });
+    if (!id) return;
     try {
       await api.deleteCandidate(id);
       if (selectedCandidateId === id) {
         setSelectedCandidateId(null);
+        setCandidateDetails(null);
       }
       fetchCandidates();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setDeleteConfirm({
+        isOpen: true,
+        candidateId: null,
+        candidateName: '',
+        message: err.message || 'Failed to delete candidate.',
+        canProceed: false,
+      });
     }
   };
 
@@ -485,6 +582,20 @@ export default function App() {
       }
     } catch (err) {
       console.error('Failed to toggle blacklist status:', err);
+    }
+  };
+
+  const handleToggleDisqualifyAssessment = async (assessmentId: number, disqualified: boolean) => {
+    try {
+      await api.disqualifyAssessment(assessmentId, disqualified);
+      // Refresh candidate details to update DossierModal state
+      if (selectedCandidateId !== null) {
+        await fetchCandidateDetails(selectedCandidateId);
+      }
+      // Refresh general lists (updates Profiles Ledger badges, Registry role filter, and Projects Matches)
+      await fetchCandidates();
+    } catch (err: any) {
+      alert(err.message || 'Failed to change assessment status');
     }
   };
 
@@ -668,12 +779,22 @@ export default function App() {
           <button
             onClick={() => setActiveTab('projects')}
             className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
-              activeTab === 'projects' 
-                ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
+              activeTab === 'projects'
+                ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             Projects
+          </button>
+          <button
+            onClick={() => setActiveTab('utilization')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'utilization'
+                ? 'bg-cyber-green/10 border border-cyber-green/30 text-cyber-green font-bold'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Utilization
           </button>
         </div>
         
@@ -849,6 +970,9 @@ export default function App() {
                               </span>
                               <span className="px-2 py-0.5 bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta rounded text-[9px] font-mono uppercase tracking-wider">
                                 {profile.engagement_tier}
+                              </span>
+                              <span className="px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/20 text-cyber-cyan rounded text-[9px] font-mono uppercase tracking-wider font-bold">
+                                {candidates.filter((c) => c.assessments && c.assessments.some((a) => a.role_name === profile.role_name)).length} Candidates
                               </span>
                             </div>
                             <h4 className="text-base font-bold font-sans text-slate-100 group-hover:text-cyber-cyan transition-colors mt-1.5">
@@ -1045,10 +1169,13 @@ export default function App() {
                       {ledgerCandidates.map((c) => {
                         const isSelected = selectedCandidateId === c.id;
                         return (
-                          <button
+                          <div
                             key={c.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setSelectedCandidateId(c.id)}
-                            className={`w-full text-left p-3 rounded border transition-all flex flex-col gap-1.5 ${
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedCandidateId(c.id); }}
+                            className={`w-full text-left p-3 rounded border transition-all flex flex-col gap-1.5 cursor-pointer ${
                               isSelected 
                                 ? 'bg-cyber-magenta/10 border-cyber-magenta text-white shadow-magenta-glow' 
                                 : 'bg-cyber-gray/50 border-cyber-slate/30 text-slate-300 hover:border-cyber-slate'
@@ -1056,7 +1183,7 @@ export default function App() {
                           >
                             <div className="flex justify-between items-start w-full">
                               <span className="text-xs font-bold font-sans truncate">{c.full_name}</span>
-                              <span className="text-[9px] font-mono text-slate-400">
+                              <span className="text-[9px] font-mono text-slate-400 shrink-0">
                                 {new Date(c.created_at).toLocaleDateString()}
                               </span>
                             </div>
@@ -1083,7 +1210,7 @@ export default function App() {
                                 <span className="truncate">{c.linkedin_url}</span>
                               </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
 
@@ -1133,17 +1260,27 @@ export default function App() {
                           </div>
                         </div>
 
-                        {candidateDetails.linkedin_url && (
-                          <a 
-                            href={candidateDetails.linkedin_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1 border border-cyber-cyan/30 bg-cyber-cyan/5 text-cyber-cyan rounded text-xs font-mono flex items-center gap-1.5 self-start md:self-center hover:bg-cyber-cyan/10 transition-colors"
+                        <div className="flex items-center gap-2 self-start md:self-center">
+                          {candidateDetails.linkedin_url && (
+                            <a 
+                              href={candidateDetails.linkedin_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1 border border-cyber-cyan/30 bg-cyber-cyan/5 text-cyber-cyan rounded text-xs font-mono flex items-center gap-1.5 hover:bg-cyber-cyan/10 transition-colors"
+                            >
+                              <Linkedin size={12} />
+                              <span>LinkedIn Profile</span>
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCandidate(candidateDetails.id)}
+                            className="px-3 py-1.5 border border-red-500/40 bg-red-900/15 text-red-400 rounded text-xs font-mono flex items-center gap-1.5 hover:bg-red-900/30 hover:text-red-300 transition-colors font-bold"
                           >
-                            <Linkedin size={12} />
-                            <span>LinkedIn Profile</span>
-                          </a>
-                        )}
+                            <Trash2 size={12} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Blacklist banner restriction */}
@@ -1223,11 +1360,15 @@ export default function App() {
                               {candidateDetails.assessments.map((a, idx) => {
                                 const hasRed = a.red_flags_detected && a.red_flags_detected.length > 0;
                                 const isFocused = activeAssessmentIndex === idx;
+                                const isDisqualified = a.is_disqualified === true;
                                 
                                 // Score color
                                 let scoreColor = 'text-cyber-cyan';
                                 let barColor = 'bg-cyber-cyan';
-                                if (hasRed || a.match_score < 50) {
+                                if (isDisqualified) {
+                                  scoreColor = 'text-slate-600';
+                                  barColor = 'bg-slate-600';
+                                } else if (hasRed || a.match_score < 50) {
                                   scoreColor = 'text-cyber-magenta';
                                   barColor = 'bg-cyber-magenta';
                                 } else if (a.match_score >= 50 && a.match_score < 80) {
@@ -1240,43 +1381,71 @@ export default function App() {
                                     key={a.id}
                                     onClick={() => setActiveAssessmentIndex(idx)}
                                     className={`p-3 rounded border flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer transition-all ${
-                                      isFocused 
-                                        ? 'bg-cyber-dark border-cyber-cyan shadow-cyan-glow/20 shadow-sm' 
-                                        : 'bg-cyber-gray/30 border-cyber-slate/30 hover:border-cyber-slate hover:bg-cyber-gray/50'
+                                      isDisqualified
+                                        ? 'bg-cyber-gray/15 border-cyber-slate/20 opacity-60'
+                                        : isFocused 
+                                          ? 'bg-cyber-dark border-cyber-cyan shadow-cyan-glow/20 shadow-sm' 
+                                          : 'bg-cyber-gray/30 border-cyber-slate/30 hover:border-cyber-slate hover:bg-cyber-gray/50'
                                     }`}
                                   >
                                     {/* Role name & layer */}
                                     <div className="md:w-1/3 truncate">
-                                      <div className="text-xs font-bold text-slate-100 truncate">{a.role_name}</div>
+                                      <div className={`text-xs font-bold truncate ${isDisqualified ? 'text-slate-500 line-through' : 'text-slate-100'}`}>{a.role_name}</div>
                                       <div className="text-[9px] font-mono text-slate-400 mt-0.5">{a.stack_layer}</div>
                                     </div>
 
                                     {/* Progress Bar Score */}
                                     <div className="flex-1 flex items-center gap-3">
-                                      <div className="w-full bg-cyber-dark rounded-full h-1.5 overflow-hidden border border-cyber-slate/50">
-                                        <div 
-                                          className={`${barColor} h-full transition-all duration-500`}
-                                          style={{ width: `${a.match_score}%` }}
-                                        />
-                                      </div>
-                                      <span className={`text-xs font-bold font-mono ${scoreColor} w-10 text-right`}>
-                                        {a.match_score}%
-                                      </span>
+                                      {isDisqualified ? (
+                                        <span className="text-[10px] font-mono text-red-400/80 bg-red-900/20 border border-red-500/30 px-2 py-0.5 rounded uppercase tracking-wider">
+                                          Disqualified
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <div className="w-full bg-cyber-dark rounded-full h-1.5 overflow-hidden border border-cyber-slate/50">
+                                            <div 
+                                              className={`${barColor} h-full transition-all duration-500`}
+                                              style={{ width: `${a.match_score}%` }}
+                                            />
+                                          </div>
+                                          <span className={`text-xs font-bold font-mono ${scoreColor} w-10 text-right`}>
+                                            {a.match_score}%
+                                          </span>
+                                        </>
+                                      )}
                                     </div>
 
                                     {/* Red Flags count & action */}
-                                    <div className="flex items-center justify-between md:justify-end gap-6">
-                                      {hasRed ? (
-                                        <span className="flex items-center gap-1 text-[10px] text-cyber-magenta font-mono">
-                                          <AlertTriangle size={12} />
-                                          <span>{a.red_flags_detected.length} RED FLAGS</span>
-                                        </span>
-                                      ) : (
-                                        <span className="flex items-center gap-1 text-[10px] text-cyber-green font-mono">
-                                          <CheckCircle2 size={12} />
-                                          <span>COMPLIANT</span>
-                                        </span>
+                                    <div className="flex items-center justify-between md:justify-end gap-3">
+                                      {!isDisqualified && (
+                                        hasRed ? (
+                                          <span className="flex items-center gap-1 text-[10px] text-cyber-magenta font-mono">
+                                            <AlertTriangle size={12} />
+                                            <span>{a.red_flags_detected.length} RED FLAGS</span>
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center gap-1 text-[10px] text-cyber-green font-mono">
+                                            <CheckCircle2 size={12} />
+                                            <span>COMPLIANT</span>
+                                          </span>
+                                        )
                                       )}
+
+                                      {/* Disqualify / Re-qualify toggle */}
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleDisqualifyAssessment(a.id, !isDisqualified);
+                                        }}
+                                        className={`px-2 py-1 border text-[9px] font-mono rounded uppercase transition-colors font-bold ${
+                                          isDisqualified
+                                            ? 'border-cyber-green/50 text-cyber-green bg-cyber-green/10 hover:bg-cyber-green/20'
+                                            : 'border-red-500/40 text-red-400 bg-red-900/10 hover:bg-red-900/25'
+                                        }`}
+                                        title={isDisqualified ? 'Re-qualify this candidate for this profile' : 'Disqualify this candidate from this profile'}
+                                      >
+                                        {isDisqualified ? 'Re-qualify' : 'Disqualify'}
+                                      </button>
 
                                       <button 
                                         onClick={(e) => {
@@ -1574,13 +1743,22 @@ export default function App() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
-                              candidate.assigned_project_id
-                                ? 'bg-cyber-magenta/15 text-cyber-magenta border border-cyber-magenta/30 shadow-magenta-glow/20'
-                                : 'bg-cyber-green/15 text-cyber-green border border-cyber-green/30'
-                            }`}>
-                              {candidate.assigned_project_id ? `Assigned: ${candidate.assigned_project_name}` : 'Available'}
-                            </span>
+                            {(() => {
+                              const asgns = candidate.assignments || [];
+                              const isAssigned = asgns.length > 0;
+                              const label = isAssigned
+                                ? `Assigned: ${[...new Set(asgns.map(a => a.project_name).filter(Boolean))].join(', ')}`
+                                : 'Available';
+                              return (
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
+                                  isAssigned
+                                    ? 'bg-cyber-magenta/15 text-cyber-magenta border border-cyber-magenta/30'
+                                    : 'bg-cyber-green/15 text-cyber-green border border-cyber-green/30'
+                                }`}>
+                                  {label}
+                                </span>
+                              );
+                            })()}
                             <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
                               candidate.is_blacklisted 
                                 ? 'bg-cyber-magenta/25 text-cyber-magenta border border-cyber-magenta/30 animate-pulse' 
@@ -1629,23 +1807,51 @@ export default function App() {
 
                           {/* Best Vetting Fit */}
                           <div className="border-t border-cyber-slate/20 pt-3 mt-3">
-                            <span className="text-[9px] font-mono text-slate-400 block mb-1">BEST FIT ROLE:</span>
-                            {candidate.highest_role_name ? (
-                              <div className="flex items-center justify-between bg-cyber-dark/50 border border-cyber-slate/30 rounded px-2.5 py-1.5 shadow-inner">
-                                <span className="text-[10px] font-mono text-slate-200 truncate pr-2" title={candidate.highest_role_name}>
-                                  {candidate.highest_role_name}
-                                </span>
-                                <span className={`text-[10px] font-mono font-bold shrink-0 ${
-                                  (candidate.highest_score ?? 0) >= 80 ? 'text-cyber-green' :
-                                  (candidate.highest_score ?? 0) >= 60 ? 'text-cyber-cyan' :
-                                  (candidate.highest_score ?? 0) >= 40 ? 'text-cyber-yellow' :
-                                  'text-cyber-magenta'
-                                }`}>
-                                  {candidate.highest_score}%
-                                </span>
-                              </div>
+                            {registryFilterRole ? (
+                              <>
+                                <span className="text-[9px] font-mono text-slate-400 block mb-1">FILTERED ROLE FIT:</span>
+                                {(() => {
+                                  const activeAssessment = candidate.assessments?.find((a) => a.role_name === registryFilterRole);
+                                  return activeAssessment ? (
+                                    <div className="flex items-center justify-between bg-cyber-dark/50 border border-cyber-slate/30 rounded px-2.5 py-1.5 shadow-inner">
+                                      <span className="text-[10px] font-mono text-slate-200 truncate pr-2" title={activeAssessment.role_name}>
+                                        {activeAssessment.role_name}
+                                      </span>
+                                      <span className={`text-[10px] font-mono font-bold shrink-0 ${
+                                        activeAssessment.match_score >= 80 ? 'text-cyber-green' :
+                                        activeAssessment.match_score >= 60 ? 'text-cyber-cyan' :
+                                        activeAssessment.match_score >= 40 ? 'text-cyber-yellow' :
+                                        'text-cyber-magenta'
+                                      }`}>
+                                        {activeAssessment.match_score}%
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] font-mono text-slate-500 italic block">No assessment for this role.</span>
+                                  );
+                                })()}
+                              </>
                             ) : (
-                              <span className="text-[10px] font-mono text-slate-500 italic block">No assessments recorded.</span>
+                              <>
+                                <span className="text-[9px] font-mono text-slate-400 block mb-1">BEST FIT ROLE:</span>
+                                {candidate.highest_role_name ? (
+                                  <div className="flex items-center justify-between bg-cyber-dark/50 border border-cyber-slate/30 rounded px-2.5 py-1.5 shadow-inner">
+                                    <span className="text-[10px] font-mono text-slate-200 truncate pr-2" title={candidate.highest_role_name}>
+                                      {candidate.highest_role_name}
+                                    </span>
+                                    <span className={`text-[10px] font-mono font-bold shrink-0 ${
+                                      (candidate.highest_score ?? 0) >= 80 ? 'text-cyber-green' :
+                                      (candidate.highest_score ?? 0) >= 60 ? 'text-cyber-cyan' :
+                                      (candidate.highest_score ?? 0) >= 40 ? 'text-cyber-yellow' :
+                                      'text-cyber-magenta'
+                                    }`}>
+                                      {candidate.highest_score}%
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-mono text-slate-500 italic block">No assessments recorded.</span>
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -1668,15 +1874,16 @@ export default function App() {
                             <span>{candidate.is_blacklisted ? 'BLACKLISTED (whitelist)' : 'BLACKLIST'}</span>
                           </button>
 
-                          {candidate.assigned_project_id && (
+                          {(candidate.assignments || []).map(a => (
                             <button
-                              onClick={() => handleReleaseCandidate(candidate.id)}
+                              key={a.id}
+                              onClick={() => handleReleaseAssignment(a.id)}
                               className="flex items-center gap-1 py-1.5 px-2 rounded border border-cyber-magenta/30 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 text-cyber-magenta hover:text-white text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 font-bold"
-                              title={`Release from project: ${candidate.assigned_project_name}`}
+                              title={`Release from ${a.project_name || 'project'}`}
                             >
-                              <span>RELEASE RESOURCE</span>
+                              <span>RELEASE: {a.project_name || 'project'}{a.start_date ? ` (${a.start_date})` : ''}</span>
                             </button>
-                          )}
+                          ))}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -1942,49 +2149,66 @@ export default function App() {
                                       {matchingCands.map((c) => {
                                         const matchingAssessment = c.assessments?.find((a) => a.role_name === match.role_name);
                                         const score = matchingAssessment?.match_score || 0;
-                                        const isAssigned = c.assigned_project_id !== null;
-                                        const isAssignedHere = c.assigned_project_id === selectedProjectId;
-                                        
+                                        const thisProfileSlots = (c.assignments || []).filter(a => a.project_id === selectedProjectId && a.profile_id === match.id);
+                                        const otherSlots = (c.assignments || []).filter(a => !(a.project_id === selectedProjectId && a.profile_id === match.id));
+                                        const isAssignedHere = thisProfileSlots.length > 0;
+
                                         return (
-                                          <div key={c.id} className="flex justify-between items-center gap-3 bg-cyber-dark/80 border border-cyber-slate/30 p-2 rounded text-[11px] w-full">
-                                            <div className="flex items-center gap-2 truncate">
-                                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                                !isAssigned ? 'bg-cyber-green' : isAssignedHere ? 'bg-cyber-cyan animate-pulse' : 'bg-cyber-magenta'
-                                              }`} />
-                                              <span className="font-bold text-slate-300 truncate">{c.full_name}</span>
-                                              <span className="text-[9px] text-slate-500 shrink-0">({c.experience_years}y exp)</span>
-                                              <span className={`text-[10px] font-bold font-mono shrink-0 ${
-                                                score >= 80 ? 'text-cyber-green' : score >= 60 ? 'text-cyber-cyan' : 'text-cyber-yellow'
-                                              }`}>
-                                                {score}% Match
-                                              </span>
+                                          <div key={c.id} className="flex flex-col gap-1.5 bg-cyber-dark/80 border border-cyber-slate/30 p-2 rounded text-[11px] w-full">
+                                            {/* Candidate info row */}
+                                            <div className="flex justify-between items-center gap-3">
+                                              <div className="flex items-center gap-2 truncate">
+                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                  isAssignedHere ? 'bg-cyber-cyan animate-pulse' : (c.assignments || []).length === 0 ? 'bg-cyber-green' : 'bg-cyber-yellow'
+                                                }`} />
+                                                <span className="font-bold text-slate-300 truncate">{c.full_name}</span>
+                                                <span className="text-[9px] text-slate-500 shrink-0">({c.experience_years}y exp)</span>
+                                                <span className={`text-[10px] font-bold font-mono shrink-0 ${
+                                                  score >= 80 ? 'text-cyber-green' : score >= 60 ? 'text-cyber-cyan' : 'text-cyber-yellow'
+                                                }`}>
+                                                  {score}% Match
+                                                </span>
+                                              </div>
+                                              {/* Always show Assign button */}
+                                              <button
+                                                type="button"
+                                                disabled={!selectedProjectId}
+                                                onClick={() => selectedProjectId && setAssignModal({
+                                                  candidateId: c.id,
+                                                  candidateName: c.full_name,
+                                                  projectId: selectedProjectId,
+                                                  profileId: match.id,
+                                                  profileName: match.role_name,
+                                                  startDate: '',
+                                                  endDate: '',
+                                                })}
+                                                className="px-2 py-0.5 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/35 text-cyber-cyan hover:text-white disabled:opacity-40 disabled:pointer-events-none rounded font-mono text-[9px] uppercase tracking-wider transition-colors font-bold shrink-0"
+                                                title={!selectedProjectId ? "Save this SOW Project workspace before assigning candidates" : "Add assignment slot"}
+                                              >
+                                                + Slot
+                                              </button>
                                             </div>
-                                            
-                                            <div className="flex items-center gap-2 shrink-0">
-                                              {isAssignedHere ? (
+                                            {/* Existing slots for this profile */}
+                                            {thisProfileSlots.map(slot => (
+                                              <div key={slot.id} className="flex justify-between items-center gap-2 pl-3 py-0.5 border-l-2 border-cyber-cyan/30">
+                                                <span className="text-[9px] font-mono text-slate-400">
+                                                  {slot.start_date || '?'} → {slot.end_date || 'open'}
+                                                </span>
                                                 <button
                                                   type="button"
-                                                  onClick={() => handleReleaseCandidate(c.id)}
-                                                  className="px-2 py-1 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors font-bold"
+                                                  onClick={() => handleReleaseAssignment(slot.id)}
+                                                  className="px-1.5 py-0.5 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[8px] uppercase tracking-wider transition-colors font-bold shrink-0"
                                                 >
                                                   Release
                                                 </button>
-                                              ) : isAssigned ? (
-                                                <span className="text-[9px] font-mono text-cyber-magenta bg-cyber-magenta/10 border border-cyber-magenta/20 px-2 py-0.5 rounded truncate max-w-[120px]" title={`Assigned to ${c.assigned_project_name}`}>
-                                                  Assigned: {c.assigned_project_name}
-                                                </span>
-                                              ) : (
-                                                <button
-                                                  type="button"
-                                                  disabled={!selectedProjectId}
-                                                  onClick={() => selectedProjectId && handleAssignCandidate(selectedProjectId, c.id)}
-                                                  className="px-2 py-1 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/35 text-cyber-cyan hover:text-white disabled:opacity-40 disabled:pointer-events-none rounded font-mono text-[9px] uppercase tracking-wider transition-colors font-bold"
-                                                  title={!selectedProjectId ? "Save this SOW Project workspace before assigning candidates" : "Assign candidate to project"}
-                                                >
-                                                  Assign
-                                                </button>
-                                              )}
-                                            </div>
+                                              </div>
+                                            ))}
+                                            {/* Other project/profile slots indicator */}
+                                            {otherSlots.length > 0 && (
+                                              <div className="pl-3 text-[8px] font-mono text-cyber-yellow">
+                                                Also in: {otherSlots.map(s => s.project_name || 'project').join(', ')}
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })}
@@ -2113,9 +2337,13 @@ export default function App() {
                   ) : (
                     projects.map((p) => {
                       const isSelected = activeViewProjectId === p.id;
-                      const matchedCount = p.analysis_results?.matched_profiles?.length || 0;
-                      const missingCount = p.analysis_results?.missing_profiles?.length || 0;
-                      const resourcesCount = candidates.filter(c => c.assigned_project_id === p.id).length;
+                      const rawMissing = p.analysis_results?.missing_profiles || [];
+                      const promotedCount = rawMissing.filter((mp: TalentProfile) => profiles.some(pr => pr.role_name === mp.role_name)).length;
+                      const matchedCount = (p.analysis_results?.matched_profiles?.length || 0) + promotedCount;
+                      const missingCount = rawMissing.length - promotedCount;
+                      const resourcesCount = new Set(
+                        candidates.flatMap(c => (c.assignments || []).filter(a => a.project_id === p.id).map(() => c.id))
+                      ).size;
                       
                       return (
                         <div
@@ -2193,7 +2421,13 @@ export default function App() {
                       );
                     }
                     
-                    const assignedResources = candidates.filter(c => c.assigned_project_id === activeProject.id);
+                    // All assignment slots for this project (with candidate reference)
+                    const projectSlots = candidates.flatMap(c =>
+                      (c.assignments || [])
+                        .filter(a => a.project_id === activeProject.id)
+                        .map(a => ({ slot: a, candidate: c }))
+                    );
+                    const assignedResources = [...new Map(projectSlots.map(ps => [ps.candidate.id, ps.candidate])).values()];
 
                     // Dynamic requirements mapping for the active project
                     const projectMatchedProfiles = (() => {
@@ -2249,55 +2483,95 @@ export default function App() {
                           </button>
                         </div>
 
-                        {/* Assigned resources grid */}
+                        {/* Role allocation view — profiles with assigned candidates grouped */}
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
-                              Assigned Resources ({assignedResources.length})
+                              Role Allocations ({assignedResources.length} / {projectMatchedProfiles.length} Filled)
                             </span>
                           </div>
-                          
-                          {assignedResources.length === 0 ? (
+
+                          {projectMatchedProfiles.length === 0 ? (
                             <div className="bg-cyber-gray/30 border border-cyber-slate/30 p-6 text-center text-slate-500 italic text-xs rounded-lg">
-                              No candidate resources assigned to this project workspace yet. Select a candidate under matching profile cards in the SOW Planner to assign them.
+                              No matched profiles for this project. Analyze the SOW in the Planner tab first.
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {assignedResources.map((res) => (
-                                <div key={res.id} className="bg-cyber-dark/80 border border-cyber-slate/30 p-4 rounded-lg flex flex-col justify-between gap-3 relative group">
-                                  <div>
-                                    <div className="flex justify-between items-start gap-2">
-                                      <h4 className="text-xs font-bold text-slate-200">{res.full_name}</h4>
-                                      <span className="text-[9px] font-mono text-slate-400 bg-cyber-gray px-1.5 py-0.5 rounded">
-                                        {res.experience_years}y exp
+                            <div className="space-y-1.5">
+                              {projectMatchedProfiles.map((prof) => {
+                                const profSlots = projectSlots.filter(ps => ps.slot.profile_id === prof.id);
+                                const isFilled = profSlots.length > 0;
+                                return (
+                                  <div key={prof.id} className="border border-cyber-slate/30 rounded-lg overflow-hidden">
+                                    {/* Role header row */}
+                                    <div className={`px-3 py-2 flex items-center justify-between gap-2 ${isFilled ? 'bg-cyber-green/5 border-b border-cyber-slate/20' : 'bg-cyber-dark/40 border-b border-cyber-slate/10'}`}>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFilled ? 'bg-cyber-green' : 'bg-cyber-slate/40'}`} />
+                                        <span className="text-[11px] font-bold font-mono text-slate-200 truncate">{prof.role_name}</span>
+                                      </div>
+                                      <span className={`text-[8px] font-mono uppercase tracking-widest shrink-0 ${isFilled ? 'text-cyber-green' : 'text-slate-600'}`}>
+                                        {isFilled ? `${profSlots.length} Slot${profSlots.length > 1 ? 's' : ''}` : 'Open'}
                                       </span>
                                     </div>
-                                    <span className="text-[10px] text-slate-400 font-sans block mt-1">
-                                      {res.email || 'No email provided'}
-                                    </span>
-                                    
-                                    <div className="mt-2.5 flex flex-wrap gap-1">
-                                      {res.skills.slice(0, 4).map((s) => (
-                                        <span key={s} className="px-1.5 py-0.5 bg-cyber-slate/20 text-slate-300 rounded text-[8px] font-mono">
-                                          {s}
-                                        </span>
-                                      ))}
-                                      {res.skills.length > 4 && (
-                                        <span className="px-1.5 py-0.5 text-slate-500 text-[8px] font-mono">
-                                          +{res.skills.length - 4} more
-                                        </span>
-                                      )}
-                                    </div>
+                                    {/* Assignment slot rows */}
+                                    {isFilled ? (
+                                      profSlots.map(({ slot, candidate: res }) => (
+                                        <div key={slot.id} className="px-3 py-2.5 bg-cyber-dark/30 flex justify-between items-center gap-3 border-b border-cyber-slate/10 last:border-0">
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <span className="text-xs font-bold text-slate-200">{res.full_name}</span>
+                                              <span className="text-[9px] font-mono text-slate-400 bg-cyber-gray px-1.5 py-0.5 rounded shrink-0">{res.experience_years}y exp</span>
+                                              {slot.start_date && (
+                                                <span className="text-[9px] font-mono text-slate-500 shrink-0">
+                                                  {slot.start_date} → {slot.end_date || 'open'}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                              {res.skills.slice(0, 4).map(s => (
+                                                <span key={s} className="px-1.5 py-0.5 bg-cyber-slate/20 text-slate-300 rounded text-[8px] font-mono">{s}</span>
+                                              ))}
+                                              {res.skills.length > 4 && <span className="text-[8px] text-slate-500 font-mono">+{res.skills.length - 4}</span>}
+                                            </div>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleReleaseAssignment(slot.id)}
+                                            className="px-2 py-0.5 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all font-bold shrink-0"
+                                          >
+                                            Release
+                                          </button>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-2 bg-cyber-dark/20">
+                                        <span className="text-[10px] font-sans text-slate-600 italic">No candidate assigned — use SOW Planner to assign</span>
+                                      </div>
+                                    )}
                                   </div>
-                                  
-                                  <div className="pt-2 border-t border-cyber-slate/10 flex justify-between items-center">
-                                    <span className="text-[8px] font-mono text-cyber-cyan uppercase tracking-widest">
-                                      Assigned Talent
-                                    </span>
+                                );
+                              })}
+                              {/* Fallback: slots with a profile outside the matched list */}
+                              {projectSlots.filter(ps => !projectMatchedProfiles.some(p => p.id === ps.slot.profile_id)).map(({ slot, candidate: res }) => (
+                                <div key={slot.id} className="border border-cyber-yellow/20 rounded-lg overflow-hidden">
+                                  <div className="px-3 py-2 flex items-center justify-between gap-2 bg-cyber-dark/40 border-b border-cyber-yellow/10">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-cyber-yellow" />
+                                      <span className="text-[11px] font-bold font-mono text-slate-400 truncate">{slot.profile_name || 'Unclassified Role'}</span>
+                                    </div>
+                                    <span className="text-[8px] font-mono uppercase tracking-widest text-cyber-yellow shrink-0">Assigned</span>
+                                  </div>
+                                  <div className="px-3 py-2.5 bg-cyber-dark/30 flex justify-between items-center gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs font-bold text-slate-200">{res.full_name}</span>
+                                        <span className="text-[9px] font-mono text-slate-400 bg-cyber-gray px-1.5 py-0.5 rounded shrink-0">{res.experience_years}y exp</span>
+                                        {slot.start_date && <span className="text-[9px] font-mono text-slate-500">{slot.start_date} → {slot.end_date || 'open'}</span>}
+                                      </div>
+                                    </div>
                                     <button
                                       type="button"
-                                      onClick={() => handleReleaseCandidate(res.id)}
-                                      className="px-2 py-0.5 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all font-bold"
+                                      onClick={() => handleReleaseAssignment(slot.id)}
+                                      className="px-2 py-0.5 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all font-bold shrink-0"
                                     >
                                       Release
                                     </button>
@@ -2308,71 +2582,44 @@ export default function App() {
                           )}
                         </div>
 
-                        {/* Split panel: Requirements Matching & Gaps */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Matched roles list */}
-                          <div className="space-y-3">
-                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-                              SOW Matched Profiles ({projectMatchedProfiles.length})
-                            </span>
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                              {projectMatchedProfiles.map((m: any, idx: number) => (
-                                <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg">
-                                  <h4 className="text-[11px] font-bold text-slate-200">{m.role_name}</h4>
-                                  <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">
-                                    {m.relevance_reason}
+                        {/* Identified Missing Gaps */}
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
+                            Identified Missing Gaps ({projectMissingProfiles.length})
+                          </span>
+                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                            {projectMissingProfiles.map((mis: any, idx: number) => (
+                              <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg flex justify-between items-start gap-2">
+                                <div className="flex-1">
+                                  <h4 className="text-[11px] font-bold text-slate-200">{mis.role_name}</h4>
+                                  <span className="text-[8px] font-mono text-cyber-yellow uppercase tracking-widest block mt-0.5">
+                                    {mis.stack_layer}
+                                  </span>
+                                  <p className="text-[10px] text-slate-400 font-sans mt-1 leading-relaxed">
+                                    {mis.role_summary}
                                   </p>
                                 </div>
-                              ))}
-                              {projectMatchedProfiles.length === 0 && (
-                                <div className="text-[10px] text-slate-500 italic p-3 text-center">
-                                  No matched profiles.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Missing roles gaps list */}
-                          <div className="space-y-3">
-                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
-                              Identified Missing Gaps ({projectMissingProfiles.length})
-                            </span>
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                              {projectMissingProfiles.map((mis: any, idx: number) => {
-                                return (
-                                  <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg flex justify-between items-start gap-2">
-                                    <div className="flex-1">
-                                      <h4 className="text-[11px] font-bold text-slate-200">{mis.role_name}</h4>
-                                      <span className="text-[8px] font-mono text-cyber-yellow uppercase tracking-widest block mt-0.5">
-                                        {mis.stack_layer}
-                                      </span>
-                                      <p className="text-[10px] text-slate-400 font-sans mt-1 leading-relaxed">
-                                        {mis.role_summary}
-                                      </p>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={async () => {
-                                        try {
-                                          await api.createProfile(mis);
-                                          fetchProfiles();
-                                        } catch (err) {
-                                          alert('Failed to add profile: ' + err);
-                                        }
-                                      }}
-                                      className="px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider rounded border border-cyber-cyan/35 text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan/20 transition-all shrink-0 font-bold"
-                                    >
-                                      Add
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                              {projectMissingProfiles.length === 0 && (
-                                <div className="text-[10px] text-slate-500 italic p-3 text-center">
-                                  No missing profile gaps identified.
-                                </div>
-                              )}
-                            </div>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await api.createProfile(mis);
+                                      fetchProfiles();
+                                    } catch (err) {
+                                      alert('Failed to add profile: ' + err);
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider rounded border border-cyber-cyan/35 text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan/20 transition-all shrink-0 font-bold"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                            ))}
+                            {projectMissingProfiles.length === 0 && (
+                              <div className="text-[10px] text-slate-500 italic p-3 text-center">
+                                No missing profile gaps identified.
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -2395,6 +2642,367 @@ export default function App() {
                   })()}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 6: Resource Utilization */}
+          {activeTab === 'utilization' && (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-cyber-slate/20 pb-4 mb-4">
+                <div>
+                  <h2 className="text-xl font-bold font-sans text-slate-100 flex items-center gap-2">
+                    <TrendingUp size={20} className="text-cyber-green" />
+                    Resource Utilization
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1 font-mono">
+                    Monitor time allocation, capacity coverage, and resource availability across all active projects.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchUtilization}
+                  disabled={utilLoading}
+                  className="px-3 py-1.5 bg-cyber-green/10 hover:bg-cyber-green/20 border border-cyber-green/30 text-cyber-green rounded font-mono text-[10px] uppercase tracking-wider transition-all disabled:opacity-50 shrink-0"
+                >
+                  {utilLoading ? 'Refreshing...' : 'Refresh'}
+                </button>
+              </div>
+
+              {utilLoading && !utilData && (
+                <div className="flex items-center justify-center py-20 text-slate-500 gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyber-green border-t-transparent" />
+                  <span className="font-mono text-xs uppercase tracking-wider">Loading utilization data...</span>
+                </div>
+              )}
+
+              {utilData && (() => {
+                const { summary, active_assignments, upcoming_assignments, past_assignments, unscheduled_assignments, available_candidates, project_coverage } = utilData;
+                const allAssigned = [...active_assignments, ...upcoming_assignments, ...unscheduled_assignments];
+                const scheduledAssignments = allAssigned.filter(a => a.start_date && a.end_date);
+
+                // Gantt window
+                let ganttStart = new Date();
+                let ganttEnd = new Date();
+                ganttEnd.setMonth(ganttEnd.getMonth() + 6);
+                if (scheduledAssignments.length > 0) {
+                  const starts = scheduledAssignments.map(a => new Date(a.start_date!));
+                  const ends = scheduledAssignments.map(a => new Date(a.end_date!));
+                  const minS = new Date(Math.min(...starts.map(d => d.getTime())));
+                  const maxE = new Date(Math.max(...ends.map(d => d.getTime())));
+                  minS.setDate(minS.getDate() - 7);
+                  maxE.setDate(maxE.getDate() + 7);
+                  ganttStart = minS;
+                  ganttEnd = maxE;
+                }
+                const ganttTotalDays = Math.max(1, (ganttEnd.getTime() - ganttStart.getTime()) / 86400000);
+
+                // Month labels for Gantt header
+                const ganttMonths: { label: string; widthPct: number }[] = [];
+                const cur = new Date(ganttStart.getFullYear(), ganttStart.getMonth(), 1);
+                while (cur <= ganttEnd) {
+                  const monthStart = new Date(cur);
+                  const monthEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+                  const clampedStart = monthStart < ganttStart ? ganttStart : monthStart;
+                  const clampedEnd = monthEnd > ganttEnd ? ganttEnd : monthEnd;
+                  const days = Math.max(0, (clampedEnd.getTime() - clampedStart.getTime()) / 86400000 + 1);
+                  ganttMonths.push({
+                    label: cur.toLocaleString('default', { month: 'short', year: '2-digit' }),
+                    widthPct: (days / ganttTotalDays) * 100,
+                  });
+                  cur.setMonth(cur.getMonth() + 1);
+                }
+
+                const barLeft = (startStr: string) => {
+                  const diff = (new Date(startStr).getTime() - ganttStart.getTime()) / 86400000;
+                  return Math.max(0, (diff / ganttTotalDays) * 100);
+                };
+                const barWidth = (startStr: string, endStr: string) => {
+                  const days = (new Date(endStr).getTime() - new Date(startStr).getTime()) / 86400000 + 1;
+                  return Math.min(100, (days / ganttTotalDays) * 100);
+                };
+                const todayLeft = ((new Date().getTime() - ganttStart.getTime()) / 86400000 / ganttTotalDays) * 100;
+
+                const statusOf = (a: typeof active_assignments[0]) => {
+                  if (!a.start_date || !a.end_date) return 'unscheduled';
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const s = new Date(a.start_date); const e = new Date(a.end_date);
+                  if (s <= today && today <= e) return 'active';
+                  if (s > today) return 'upcoming';
+                  return 'past';
+                };
+
+                const durationDays = (s: string, e: string) =>
+                  Math.round((new Date(e).getTime() - new Date(s).getTime()) / 86400000) + 1;
+
+                return (
+                  <div className="space-y-6">
+                    {/* KPI Summary Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {[
+                        { label: 'Total Candidates', value: summary.total_candidates, color: 'text-slate-200', bg: 'bg-cyber-gray/40 border-cyber-slate/30' },
+                        { label: 'Active Now', value: summary.active_assignments, color: 'text-cyber-green', bg: 'bg-cyber-green/5 border-cyber-green/20' },
+                        { label: 'Upcoming', value: summary.upcoming_assignments, color: 'text-cyber-cyan', bg: 'bg-cyber-cyan/5 border-cyber-cyan/20' },
+                        { label: 'Past', value: summary.past_assignments, color: 'text-slate-400', bg: 'bg-cyber-gray/30 border-cyber-slate/20' },
+                        { label: 'Unscheduled', value: summary.unscheduled_assignments, color: 'text-cyber-yellow', bg: 'bg-cyber-yellow/5 border-cyber-yellow/20' },
+                        { label: 'Available', value: summary.available_candidates, color: 'text-cyber-magenta', bg: 'bg-cyber-magenta/5 border-cyber-magenta/20' },
+                      ].map(({ label, value, color, bg }) => (
+                        <div key={label} className={`cyber-panel rounded-lg p-4 border ${bg} text-center`}>
+                          <div className={`text-2xl font-bold font-mono ${color}`}>{value}</div>
+                          <div className="text-[9px] font-mono text-slate-500 uppercase tracking-wider mt-1">{label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Project Coverage */}
+                    <div className="cyber-panel rounded-lg p-5 space-y-4">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                        <Layers size={13} />
+                        Project Coverage
+                      </h3>
+                      {project_coverage.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic">No projects found.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {project_coverage.map(p => (
+                            <div key={p.project_id}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-[11px] font-bold font-mono text-slate-200 truncate max-w-[60%]">{p.project_name}</span>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {p.filled_roles} / {p.required_roles} roles
+                                  <span className={`ml-2 font-bold ${p.coverage_pct >= 80 ? 'text-cyber-green' : p.coverage_pct >= 40 ? 'text-cyber-yellow' : 'text-cyber-magenta'}`}>
+                                    {p.coverage_pct}%
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="w-full bg-cyber-dark border border-cyber-slate/20 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${p.coverage_pct >= 80 ? 'bg-cyber-green' : p.coverage_pct >= 40 ? 'bg-cyber-yellow' : 'bg-cyber-magenta'}`}
+                                  style={{ width: `${p.coverage_pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Resource Timeline (Gantt) */}
+                    {scheduledAssignments.length > 0 && (
+                      <div className="cyber-panel rounded-lg p-5 space-y-4">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                          <CalendarDays size={13} />
+                          Resource Timeline
+                          <span className="ml-auto text-[9px] text-slate-600 font-normal normal-case tracking-normal">
+                            {ganttStart.toLocaleDateString()} — {ganttEnd.toLocaleDateString()}
+                          </span>
+                        </h3>
+                        <div className="overflow-x-auto">
+                          <div style={{ minWidth: '600px' }}>
+                            {/* Month headers */}
+                            <div className="flex border-b border-cyber-slate/20 mb-2 pb-1">
+                              {ganttMonths.map((m, i) => (
+                                <div key={i} style={{ width: `${m.widthPct}%` }} className="text-[8px] font-mono text-slate-500 uppercase tracking-wider text-center shrink-0">
+                                  {m.label}
+                                </div>
+                              ))}
+                            </div>
+                            {/* Candidate rows */}
+                            <div className="space-y-1.5 relative">
+                              {/* Today line */}
+                              {todayLeft >= 0 && todayLeft <= 100 && (
+                                <div className="absolute top-0 bottom-0 w-px bg-cyber-yellow/60 z-10 pointer-events-none" style={{ left: `${todayLeft}%` }} />
+                              )}
+                              {/* Group all slots per candidate into a single row */}
+                              {Array.from(
+                                scheduledAssignments.reduce((map, a) => {
+                                  if (!map.has(a.candidate_id)) map.set(a.candidate_id, { full_name: a.full_name, slots: [] });
+                                  map.get(a.candidate_id)!.slots.push(a);
+                                  return map;
+                                }, new Map<number, { full_name: string; slots: typeof scheduledAssignments }>())
+                              ).map(([candidateId, row]) => (
+                                <div key={candidateId} className="flex items-center gap-2 h-7">
+                                  <div className="w-32 shrink-0 text-[10px] font-mono text-slate-300 truncate text-right pr-2">{row.full_name}</div>
+                                  <div className="flex-1 relative h-5 bg-cyber-dark/50 rounded border border-cyber-slate/10">
+                                    {row.slots.map((a, aIdx) => {
+                                      const left = barLeft(a.start_date!);
+                                      const width = barWidth(a.start_date!, a.end_date!);
+                                      const status = statusOf(a);
+                                      const barColor = status === 'active' ? 'bg-cyber-green' : status === 'upcoming' ? 'bg-cyber-cyan' : 'bg-slate-600';
+                                      return (
+                                        <div
+                                          key={aIdx}
+                                          className={`absolute top-0.5 bottom-0.5 rounded ${barColor} opacity-80 flex items-center px-1.5 overflow-hidden`}
+                                          style={{ left: `${left}%`, width: `${Math.max(width, 1)}%` }}
+                                          title={`${a.full_name} — ${a.assigned_project_name} / ${a.assigned_profile_name || 'No role'} | ${a.start_date} → ${a.end_date}`}
+                                        >
+                                          <span className="text-[8px] font-mono text-white truncate leading-none">{a.assigned_profile_name || a.assigned_project_name}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {/* Legend */}
+                            <div className="flex gap-4 mt-3 pt-2 border-t border-cyber-slate/10">
+                              {[['bg-cyber-green','Active'],['bg-cyber-cyan','Upcoming'],['bg-slate-600','Past'],['bg-cyber-yellow/60','Today']].map(([cls, label]) => (
+                                <div key={label} className="flex items-center gap-1.5">
+                                  <div className={`w-3 h-2 rounded ${cls}`} />
+                                  <span className="text-[8px] font-mono text-slate-500">{label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* All Assignments Table */}
+                    <div className="cyber-panel rounded-lg p-5 space-y-4">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                        <Clock size={13} />
+                        All Assignments ({new Set([...allAssigned, ...past_assignments].map(a => a.candidate_id)).size} candidates · {allAssigned.length + past_assignments.length} slots)
+                      </h3>
+                      {[...allAssigned, ...past_assignments].length === 0 ? (
+                        <p className="text-xs text-slate-500 italic text-center py-4">No candidates are currently assigned to any project.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          {(() => {
+                            const allSlots = [...allAssigned, ...past_assignments];
+                            const statusStyles: Record<string, string> = {
+                              active: 'text-cyber-green bg-cyber-green/10 border-cyber-green/20',
+                              upcoming: 'text-cyber-cyan bg-cyber-cyan/10 border-cyber-cyan/20',
+                              past: 'text-slate-500 bg-cyber-gray/30 border-cyber-slate/20',
+                              unscheduled: 'text-cyber-yellow bg-cyber-yellow/10 border-cyber-yellow/20',
+                            };
+                            const statusPriority: Record<string, number> = { active: 0, upcoming: 1, unscheduled: 2, past: 3 };
+                            type CandidateGroup = { candidate_id: number; full_name: string; slots: typeof allSlots };
+                            const groupMap = new Map<number, CandidateGroup>();
+                            for (const a of allSlots) {
+                              const g = groupMap.get(a.candidate_id);
+                              if (g) g.slots.push(a);
+                              else groupMap.set(a.candidate_id, { candidate_id: a.candidate_id, full_name: a.full_name, slots: [a] });
+                            }
+                            const groups = [...groupMap.values()];
+                            return (
+                              <table className="w-full text-[11px] font-mono">
+                                <thead>
+                                  <tr className="border-b border-cyber-slate/20 text-[9px] text-slate-500 uppercase tracking-wider">
+                                    <th className="text-left py-2 pr-3">Candidate</th>
+                                    <th className="text-left py-2 pr-3">Project</th>
+                                    <th className="text-left py-2 pr-3">Role</th>
+                                    <th className="text-left py-2 pr-3">Start</th>
+                                    <th className="text-left py-2 pr-3">End</th>
+                                    <th className="text-left py-2 pr-3">Duration</th>
+                                    <th className="text-left py-2 pr-3">Status</th>
+                                    <th className="text-left py-2"></th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-cyber-slate/10">
+                                  {groups.map(group => {
+                                    const isExpanded = expandedUtilCandidates.has(group.candidate_id);
+                                    const dominantStatus = group.slots.reduce<string>((best, a) => {
+                                      const s = statusOf(a);
+                                      return (statusPriority[s] ?? 99) < (statusPriority[best] ?? 99) ? s : best;
+                                    }, 'past');
+                                    const datesWithValues = group.slots.filter(a => a.start_date && a.end_date);
+                                    const earliestStart = datesWithValues.length ? datesWithValues.map(a => a.start_date!).sort()[0] : null;
+                                    const latestEnd = datesWithValues.length ? datesWithValues.map(a => a.end_date!).sort().reverse()[0] : null;
+                                    return (
+                                      <React.Fragment key={group.candidate_id}>
+                                        {/* Summary row — click to expand/collapse */}
+                                        <tr
+                                          className="hover:bg-cyber-gray/20 transition-colors cursor-pointer select-none"
+                                          onClick={() => toggleUtilCandidate(group.candidate_id)}
+                                        >
+                                          <td className="py-2.5 pr-3 font-bold text-slate-200">
+                                            <span className="flex items-center gap-1.5">
+                                              {isExpanded
+                                                ? <ChevronDown size={11} className="text-cyber-cyan shrink-0" />
+                                                : <ChevronDown size={11} className="text-slate-500 shrink-0 -rotate-90" />}
+                                              {group.full_name}
+                                              <span className="ml-1 px-1 py-0 rounded bg-cyber-slate/40 text-[8px] text-slate-400 border border-cyber-slate/30">
+                                                {group.slots.length} slot{group.slots.length !== 1 ? 's' : ''}
+                                              </span>
+                                            </span>
+                                          </td>
+                                          <td colSpan={4} className="py-2.5 pr-3 text-slate-500 text-[10px]">
+                                            {earliestStart && latestEnd
+                                              ? `${earliestStart} → ${latestEnd}`
+                                              : group.slots.length > 1 ? `${group.slots.length} projects` : (group.slots[0]?.assigned_project_name || '—')}
+                                          </td>
+                                          <td className="py-2.5 pr-3 text-slate-500">—</td>
+                                          <td className="py-2.5 pr-3">
+                                            <span className={`px-1.5 py-0.5 rounded border text-[8px] uppercase tracking-widest font-bold ${statusStyles[dominantStatus]}`}>
+                                              {dominantStatus}
+                                            </span>
+                                          </td>
+                                          <td className="py-2.5" />
+                                        </tr>
+                                        {/* Slot detail rows — shown when expanded */}
+                                        {isExpanded && group.slots.map((a, si) => {
+                                          const status = statusOf(a);
+                                          return (
+                                            <tr key={`${group.candidate_id}-${si}`} className="bg-cyber-dark/30 hover:bg-cyber-dark/50 transition-colors border-l-2 border-cyber-cyan/20">
+                                              <td className="py-1.5 pr-3 pl-5 text-slate-500 text-[10px] italic">└ slot {si + 1}</td>
+                                              <td className="py-1.5 pr-3 text-slate-400 truncate max-w-[120px]">{a.assigned_project_name || '—'}</td>
+                                              <td className="py-1.5 pr-3 text-slate-400 truncate max-w-[140px]">{a.assigned_profile_name || '—'}</td>
+                                              <td className="py-1.5 pr-3 text-slate-300">{a.start_date || '—'}</td>
+                                              <td className="py-1.5 pr-3 text-slate-300">{a.end_date || '—'}</td>
+                                              <td className="py-1.5 pr-3 text-slate-400">
+                                                {a.start_date && a.end_date ? `${durationDays(a.start_date, a.end_date)}d` : '—'}
+                                              </td>
+                                              <td className="py-1.5 pr-3">
+                                                <span className={`px-1.5 py-0.5 rounded border text-[8px] uppercase tracking-widest font-bold ${statusStyles[status]}`}>
+                                                  {status}
+                                                </span>
+                                              </td>
+                                              <td className="py-1.5">
+                                                <button
+                                                  type="button"
+                                                  onClick={e => { e.stopPropagation(); handleReleaseAssignment(a.assignment_id); }}
+                                                  className="px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase tracking-wider text-cyber-magenta border border-cyber-magenta/30 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 rounded transition-all"
+                                                >
+                                                  Release
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Available Candidates */}
+                    {available_candidates.length > 0 && (
+                      <div className="cyber-panel rounded-lg p-5 space-y-4">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                          <UserCheck size={13} />
+                          Available for Assignment ({available_candidates.length})
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {available_candidates.map(c => (
+                            <div key={c.id} className="flex items-center gap-2 p-2.5 bg-cyber-dark/40 border border-cyber-slate/20 rounded-lg">
+                              <div className="w-1.5 h-1.5 rounded-full bg-cyber-green shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-bold text-slate-200 block truncate">{c.full_name}</span>
+                                <span className="text-[9px] font-mono text-slate-500">{c.experience_years}y exp</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
@@ -2463,6 +3071,8 @@ export default function App() {
         profiles={profiles}
         activeVettingProfileId={activeVettingProfileId}
         taskProgress={taskProgress}
+        onUpdateCandidate={handleSaveCandidate}
+        onToggleDisqualifyAssessment={handleToggleDisqualifyAssessment}
         onRunVetting={async (candidateId, profileId) => {
           try {
             setActiveVettingProfileId(profileId);
@@ -2474,6 +3084,112 @@ export default function App() {
           }
         }}
       />
+
+      {/* Assignment Date Modal */}
+      {assignModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="cyber-panel border border-cyber-cyan/30 rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold font-mono text-cyber-cyan uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarDays size={14} />
+                  Assign Candidate
+                </h3>
+                <p className="text-[11px] text-slate-300 mt-1 font-sans">
+                  <span className="font-bold text-slate-100">{assignModal.candidateName}</span>
+                  {' → '}
+                  <span className="text-cyber-cyan">{assignModal.profileName}</span>
+                </p>
+              </div>
+              <button type="button" onClick={() => setAssignModal(null)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[9px] font-mono uppercase tracking-wider text-slate-400 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={assignModal.startDate}
+                  onChange={e => setAssignModal(prev => prev ? { ...prev, startDate: e.target.value } : null)}
+                  className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-mono uppercase tracking-wider text-slate-400 mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={assignModal.endDate}
+                  onChange={e => setAssignModal(prev => prev ? { ...prev, endDate: e.target.value } : null)}
+                  className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono"
+                />
+              </div>
+              <p className="text-[9px] text-slate-500 font-sans">Dates are optional — you can assign without a schedule and set them later.</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-cyber-slate/30">
+              <button
+                type="button"
+                onClick={() => setAssignModal(null)}
+                className="px-3 py-1.5 border border-cyber-slate/50 text-slate-400 rounded text-xs font-mono uppercase tracking-wider hover:bg-cyber-slate/20 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAssign}
+                className="px-4 py-1.5 bg-cyber-cyan/20 hover:bg-cyber-cyan/35 border border-cyber-cyan text-cyber-cyan hover:text-white rounded text-xs font-mono uppercase tracking-wider font-bold transition-all"
+              >
+                Confirm Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="cyber-panel border border-cyber-slate/50 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className={`p-2 rounded-lg shrink-0 ${
+                deleteConfirm.canProceed
+                  ? 'bg-red-900/20 border border-red-500/30 text-red-400'
+                  : 'bg-cyber-yellow/10 border border-cyber-yellow/30 text-cyber-yellow'
+              }`}>
+                {deleteConfirm.canProceed ? <Trash2 size={20} /> : <AlertTriangle size={20} />}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold font-mono text-slate-100 uppercase tracking-wider">
+                  {deleteConfirm.canProceed ? 'Confirm Deletion' : 'Cannot Delete'}
+                </h3>
+                <p className="text-xs text-slate-300 mt-2 leading-relaxed font-sans">
+                  {deleteConfirm.message}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-3 border-t border-cyber-slate/30">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm({ isOpen: false, candidateId: null, candidateName: '', message: '', canProceed: false })}
+                className="px-4 py-1.5 border border-cyber-slate/50 text-slate-400 rounded text-xs font-mono uppercase tracking-wider hover:bg-cyber-slate/30 hover:text-slate-200 transition-colors"
+              >
+                {deleteConfirm.canProceed ? 'No' : 'OK'}
+              </button>
+              {deleteConfirm.canProceed && (
+                <button
+                  type="button"
+                  onClick={confirmDeleteCandidate}
+                  className="px-4 py-1.5 border border-red-500/50 bg-red-900/20 text-red-400 rounded text-xs font-mono uppercase tracking-wider hover:bg-red-900/40 hover:text-red-300 transition-colors font-bold"
+                >
+                  Yes, Delete
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

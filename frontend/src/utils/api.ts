@@ -11,16 +11,27 @@ export interface TalentProfile {
   offerings?: string;
 }
 
+export interface CandidateAssignmentRecord {
+  id: number;
+  project_id: number;
+  project_name: string | null;
+  profile_id: number | null;
+  profile_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+}
+
 export interface Candidate {
   id: number;
   full_name: string;
   email: string;
   linkedin_url?: string;
+  contact_number?: string;
+  notes?: string;
   skills: string[];
   experience_years: number;
   is_blacklisted: boolean;
-  assigned_project_id?: number | null;
-  assigned_project_name?: string | null;
+  assignments: CandidateAssignmentRecord[];
   created_at: string;
   highest_score?: number | null;
   highest_role_name?: string | null;
@@ -37,6 +48,7 @@ export interface Assessment {
   skills_gap: string[];
   red_flags_detected: string[];
   ai_verdict: string;
+  is_disqualified?: boolean;
   created_at: string;
 }
 
@@ -64,6 +76,43 @@ export interface Project {
   };
   created_at: string;
   assigned_resources?: Candidate[];
+}
+
+export interface AssignmentRecord {
+  assignment_id: number;
+  candidate_id: number;
+  full_name: string;
+  experience_years: number;
+  assigned_project_id: number;
+  assigned_project_name: string | null;
+  assigned_profile_id: number | null;
+  assigned_profile_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface UtilizationData {
+  as_of: string;
+  summary: {
+    total_candidates: number;
+    active_assignments: number;
+    upcoming_assignments: number;
+    past_assignments: number;
+    unscheduled_assignments: number;
+    available_candidates: number;
+  };
+  active_assignments: AssignmentRecord[];
+  upcoming_assignments: AssignmentRecord[];
+  past_assignments: AssignmentRecord[];
+  unscheduled_assignments: AssignmentRecord[];
+  available_candidates: Array<{ id: number; full_name: string; experience_years: number; skills: string[] }>;
+  project_coverage: Array<{
+    project_id: number;
+    project_name: string;
+    required_roles: number;
+    filled_roles: number;
+    coverage_pct: number;
+  }>;
 }
 
 export const api = {
@@ -216,6 +265,18 @@ export const api = {
     return res.json();
   },
 
+  async disqualifyAssessment(assessmentId: number, disqualified: boolean): Promise<void> {
+    const res = await fetch(`${API_URL}/api/assessments/${assessmentId}/disqualify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disqualified }),
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to update disqualification status');
+    }
+  },
+
   // WebSocket progress connection helper
   connectTaskProgress(taskId: string, onUpdate: (data: TaskProgress) => void, onError?: (err: Event) => void): WebSocket {
     const wsUrl = `${API_URL.replace('http', 'ws')}/ws/tasks/${taskId}`;
@@ -290,10 +351,14 @@ export const api = {
     if (!res.ok) throw new Error('Failed to delete project');
   },
 
-  async assignCandidateToProject(projectId: number, candidateId: number): Promise<any> {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}/assign/${candidateId}`, {
-      method: 'POST',
-    });
+  async assignCandidateToProject(projectId: number, candidateId: number, profileId?: number, startDate?: string, endDate?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (profileId !== undefined) params.append('profile_id', String(profileId));
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    const qs = params.toString();
+    const url = `${API_URL}/api/projects/${projectId}/assign/${candidateId}${qs ? `?${qs}` : ''}`;
+    const res = await fetch(url, { method: 'POST' });
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.detail || 'Failed to assign candidate');
@@ -301,13 +366,19 @@ export const api = {
     return res.json();
   },
 
-  async releaseCandidateFromProject(candidateId: number): Promise<any> {
-    const res = await fetch(`${API_URL}/api/projects/release/${candidateId}`, {
-      method: 'POST',
+  async getUtilization(): Promise<UtilizationData> {
+    const res = await fetch(`${API_URL}/api/utilization`);
+    if (!res.ok) throw new Error('Failed to fetch utilization data');
+    return res.json();
+  },
+
+  async releaseAssignment(assignmentId: number): Promise<any> {
+    const res = await fetch(`${API_URL}/api/assignments/${assignmentId}`, {
+      method: 'DELETE',
     });
     if (!res.ok) {
       const error = await res.json();
-      throw new Error(error.detail || 'Failed to release candidate');
+      throw new Error(error.detail || 'Failed to release assignment');
     }
     return res.json();
   }

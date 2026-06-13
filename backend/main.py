@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import FastAPI, Depends, File, UploadFile, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -49,6 +49,9 @@ class ProfileSchema(BaseModel):
 class MatchRequestSchema(BaseModel):
     profile_ids: List[int]
 
+class DisqualifyRequestSchema(BaseModel):
+    disqualified: bool
+
 class GenerateProfileRequest(BaseModel):
     title: str
 
@@ -56,6 +59,8 @@ class CandidateCreateUpdateSchema(BaseModel):
     full_name: str
     email: Optional[str] = ""
     linkedin_url: Optional[str] = ""
+    contact_number: Optional[str] = ""
+    notes: Optional[str] = ""
     skills: List[str] = []
     experience_years: Optional[int] = 0
     is_blacklisted: Optional[bool] = False
@@ -73,8 +78,13 @@ class ProjectCandidateSchema(BaseModel):
     full_name: str
     email: Optional[str] = None
     linkedin_url: Optional[str] = None
+    contact_number: Optional[str] = None
+    notes: Optional[str] = None
     skills: List[str] = []
     experience_years: Optional[int] = 0
+    assigned_profile_id: Optional[int] = None
+    assignment_start_date: Optional[date] = None
+    assignment_end_date: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -91,6 +101,21 @@ class ProjectSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+def _build_assignments(candidate) -> list:
+    return [
+        {
+            "id": a.id,
+            "project_id": a.project_id,
+            "project_name": a.project.name if a.project else None,
+            "profile_id": a.profile_id,
+            "profile_name": a.profile.role_name if a.profile else None,
+            "start_date": a.start_date.isoformat() if a.start_date else None,
+            "end_date": a.end_date.isoformat() if a.end_date else None,
+        }
+        for a in candidate.candidate_assignments
+    ]
 
 
 # Endpoints
@@ -217,21 +242,22 @@ def get_candidates(database: Session = Depends(db.get_db)):
     candidates = database.query(db.Candidate).order_by(db.Candidate.created_at.desc()).all()
     res = []
     for c in candidates:
-        best_assessment = database.query(db.Assessment).filter(db.Assessment.candidate_id == c.id).order_by(db.Assessment.match_score.desc()).first()
+        best_assessment = database.query(db.Assessment).filter(db.Assessment.candidate_id == c.id, db.Assessment.is_disqualified == False).order_by(db.Assessment.match_score.desc()).first()
         res.append({
             "id": c.id,
             "full_name": c.full_name,
             "email": c.email,
             "linkedin_url": c.linkedin_url,
+            "contact_number": c.contact_number,
+            "notes": c.notes,
             "skills": c.skills,
             "experience_years": c.experience_years,
             "is_blacklisted": c.is_blacklisted,
-            "assigned_project_id": c.assigned_project_id,
-            "assigned_project_name": c.assigned_project.name if c.assigned_project else None,
+            "assignments": _build_assignments(c),
             "created_at": c.created_at,
             "highest_score": best_assessment.match_score if best_assessment else None,
             "highest_role_name": best_assessment.profile.role_name if (best_assessment and best_assessment.profile) else None,
-            "assessments": [{"role_name": a.profile.role_name, "match_score": a.match_score} for a in c.assessments if a.profile]
+            "assessments": [{"role_name": a.profile.role_name, "match_score": a.match_score} for a in c.assessments if a.profile and not a.is_disqualified]
         })
     return res
 
@@ -257,6 +283,7 @@ def get_candidate_details(candidate_id: int, database: Session = Depends(db.get_
             "skills_gap": a.skills_gap,
             "red_flags_detected": a.red_flags_detected,
             "ai_verdict": a.ai_verdict,
+            "is_disqualified": a.is_disqualified,
             "created_at": a.created_at
         })
 
@@ -265,11 +292,12 @@ def get_candidate_details(candidate_id: int, database: Session = Depends(db.get_
         "full_name": candidate.full_name,
         "email": candidate.email,
         "linkedin_url": candidate.linkedin_url,
+        "contact_number": candidate.contact_number,
+        "notes": candidate.notes,
         "skills": candidate.skills,
         "experience_years": candidate.experience_years,
         "is_blacklisted": candidate.is_blacklisted,
-        "assigned_project_id": candidate.assigned_project_id,
-        "assigned_project_name": candidate.assigned_project.name if candidate.assigned_project else None,
+        "assignments": _build_assignments(candidate),
         "cv_raw_text": candidate.cv_raw_text,
         "created_at": candidate.created_at,
         "assessments": assessment_list
@@ -281,6 +309,8 @@ def create_candidate(candidate: CandidateCreateUpdateSchema, database: Session =
         full_name=candidate.full_name,
         email=candidate.email,
         linkedin_url=candidate.linkedin_url,
+        contact_number=candidate.contact_number,
+        notes=candidate.notes,
         skills=candidate.skills,
         experience_years=candidate.experience_years,
         is_blacklisted=candidate.is_blacklisted,
@@ -294,6 +324,8 @@ def create_candidate(candidate: CandidateCreateUpdateSchema, database: Session =
         "full_name": db_cand.full_name,
         "email": db_cand.email,
         "linkedin_url": db_cand.linkedin_url,
+        "contact_number": db_cand.contact_number,
+        "notes": db_cand.notes,
         "skills": db_cand.skills,
         "experience_years": db_cand.experience_years,
         "is_blacklisted": db_cand.is_blacklisted,
@@ -311,6 +343,8 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
     db_cand.full_name = updated.full_name
     db_cand.email = updated.email
     db_cand.linkedin_url = updated.linkedin_url
+    db_cand.contact_number = updated.contact_number
+    db_cand.notes = updated.notes
     db_cand.skills = updated.skills
     db_cand.experience_years = updated.experience_years
     db_cand.is_blacklisted = updated.is_blacklisted
@@ -322,6 +356,8 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
         "full_name": db_cand.full_name,
         "email": db_cand.email,
         "linkedin_url": db_cand.linkedin_url,
+        "contact_number": db_cand.contact_number,
+        "notes": db_cand.notes,
         "skills": db_cand.skills,
         "experience_years": db_cand.experience_years,
         "is_blacklisted": db_cand.is_blacklisted,
@@ -443,6 +479,15 @@ def match_candidate(candidate_id: int, request: MatchRequestSchema, database: Se
         "task_id": task.id
     }
 
+@app.post("/api/assessments/{assessment_id}/disqualify")
+def disqualify_assessment(assessment_id: int, request: DisqualifyRequestSchema, database: Session = Depends(db.get_db)):
+    assessment = database.query(db.Assessment).filter(db.Assessment.id == assessment_id).first()
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    assessment.is_disqualified = request.disqualified
+    database.commit()
+    return {"message": "Assessment disqualification status updated successfully"}
+
 # WebSockets Endpoint for Task Progress Streams
 
 @app.websocket("/ws/tasks/{task_id}")
@@ -546,12 +591,22 @@ async def analyze_project_scope(
 
 # Projects CRUD Endpoints
 
+def _unique_candidates_for_project(project_id: int, database: Session):
+    """Return unique Candidate objects that have at least one assignment to this project."""
+    slots = database.query(db.CandidateAssignment).filter(db.CandidateAssignment.project_id == project_id).all()
+    seen = {}
+    for s in slots:
+        if s.candidate_id not in seen:
+            seen[s.candidate_id] = s.candidate
+    return list(seen.values())
+
+
 @app.get("/api/projects", response_model=List[ProjectSchema])
 def get_projects(database: Session = Depends(db.get_db)):
     projects = database.query(db.Project).order_by(db.Project.created_at.desc()).all()
     res = []
     for p in projects:
-        cands = database.query(db.Candidate).filter(db.Candidate.assigned_project_id == p.id).all()
+        cands = _unique_candidates_for_project(p.id, database)
         res.append({
             "id": p.id,
             "name": p.name,
@@ -569,7 +624,7 @@ def get_project(project_id: int, database: Session = Depends(db.get_db)):
     project = database.query(db.Project).filter(db.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    cands = database.query(db.Candidate).filter(db.Candidate.assigned_project_id == project.id).all()
+    cands = _unique_candidates_for_project(project_id, database)
     return {
         "id": project.id,
         "name": project.name,
@@ -616,41 +671,155 @@ def delete_project(project_id: int, database: Session = Depends(db.get_db)):
 # Project Assignment Endpoints
 
 @app.post("/api/projects/{project_id}/assign/{candidate_id}")
-def assign_candidate_to_project(project_id: int, candidate_id: int, database: Session = Depends(db.get_db)):
+def assign_candidate_to_project(
+    project_id: int,
+    candidate_id: int,
+    profile_id: Optional[int] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    database: Session = Depends(db.get_db)
+):
     project = database.query(db.Project).filter(db.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-        
+
     candidate = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    if candidate.assigned_project_id is not None and candidate.assigned_project_id != project_id:
-        current_project = database.query(db.Project).filter(db.Project.id == candidate.assigned_project_id).first()
-        proj_name = current_project.name if current_project else "another project"
-        raise HTTPException(status_code=400, detail=f"Candidate is already assigned to project '{proj_name}'")
-        
-    candidate.assigned_project_id = project_id
+
+    # Check for date-range conflicts with any existing assignment
+    if start_date and end_date:
+        conflict = (
+            database.query(db.CandidateAssignment)
+            .filter(
+                db.CandidateAssignment.candidate_id == candidate_id,
+                db.CandidateAssignment.start_date.isnot(None),
+                db.CandidateAssignment.end_date.isnot(None),
+                db.CandidateAssignment.start_date <= end_date,
+                db.CandidateAssignment.end_date >= start_date,
+            )
+            .first()
+        )
+        if conflict:
+            proj_name = conflict.project.name if conflict.project else "another project"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Date conflict: candidate already has an assignment from {conflict.start_date} to {conflict.end_date} in project '{proj_name}'"
+            )
+
+    # Prevent exact-duplicate unscheduled slot (same project + profile, no dates)
+    if not (start_date and end_date):
+        dupe = (
+            database.query(db.CandidateAssignment)
+            .filter(
+                db.CandidateAssignment.candidate_id == candidate_id,
+                db.CandidateAssignment.project_id == project_id,
+                db.CandidateAssignment.profile_id == profile_id,
+                db.CandidateAssignment.start_date.is_(None),
+            )
+            .first()
+        )
+        if dupe:
+            raise HTTPException(status_code=400, detail="Candidate is already assigned to this role in this project with no dates set")
+
+    new_slot = db.CandidateAssignment(
+        candidate_id=candidate_id,
+        project_id=project_id,
+        profile_id=profile_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    database.add(new_slot)
     database.commit()
+    database.refresh(new_slot)
     database.refresh(candidate)
     return {
         "message": f"Candidate {candidate.full_name} assigned to project '{project.name}' successfully",
-        "assigned_project_id": candidate.assigned_project_id,
-        "assigned_project_name": project.name
+        "assignment_id": new_slot.id,
+        "assignments": _build_assignments(candidate),
     }
 
 
-@app.post("/api/projects/release/{candidate_id}")
-def release_candidate_from_project(candidate_id: int, database: Session = Depends(db.get_db)):
-    candidate = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
-    if not candidate:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-        
-    candidate.assigned_project_id = None
+@app.delete("/api/assignments/{assignment_id}")
+def release_assignment(assignment_id: int, database: Session = Depends(db.get_db)):
+    slot = database.query(db.CandidateAssignment).filter(db.CandidateAssignment.id == assignment_id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    candidate_name = slot.candidate.full_name if slot.candidate else "Unknown"
+    database.delete(slot)
     database.commit()
-    database.refresh(candidate)
+    return {"message": f"Assignment released for {candidate_name} successfully"}
+
+
+@app.get("/api/utilization")
+def get_utilization(database: Session = Depends(db.get_db)):
+    today = date.today()
+
+    all_candidates = database.query(db.Candidate).all()
+    all_slots = database.query(db.CandidateAssignment).all()
+    projects = database.query(db.Project).all()
+    existing_profile_names = {p.role_name for p in database.query(db.TalentProfile).all()}
+
+    assigned_candidate_ids = {s.candidate_id for s in all_slots}
+    active, upcoming, past, unscheduled = [], [], [], []
+
+    for s in all_slots:
+        info = {
+            "assignment_id": s.id,
+            "candidate_id": s.candidate_id,
+            "full_name": s.candidate.full_name if s.candidate else "Unknown",
+            "experience_years": s.candidate.experience_years if s.candidate else 0,
+            "assigned_project_id": s.project_id,
+            "assigned_project_name": s.project.name if s.project else None,
+            "assigned_profile_id": s.profile_id,
+            "assigned_profile_name": s.profile.role_name if s.profile else None,
+            "start_date": s.start_date.isoformat() if s.start_date else None,
+            "end_date": s.end_date.isoformat() if s.end_date else None,
+        }
+        if s.start_date and s.end_date:
+            if s.start_date <= today <= s.end_date:
+                active.append(info)
+            elif s.start_date > today:
+                upcoming.append(info)
+            else:
+                past.append(info)
+        else:
+            unscheduled.append(info)
+
+    available = [
+        {"id": c.id, "full_name": c.full_name, "experience_years": c.experience_years, "skills": c.skills or []}
+        for c in all_candidates if c.id not in assigned_candidate_ids
+    ]
+
+    project_coverage = []
+    for p in projects:
+        matched = p.analysis_results.get("matched_profiles", []) if p.analysis_results else []
+        missing = p.analysis_results.get("missing_profiles", []) if p.analysis_results else []
+        promoted = sum(1 for m in missing if m.get("role_name") in existing_profile_names)
+        total_required = len(matched) + promoted
+        filled = len({s.candidate_id for s in all_slots if s.project_id == p.id})
+        project_coverage.append({
+            "project_id": p.id,
+            "project_name": p.name,
+            "required_roles": total_required,
+            "filled_roles": filled,
+            "coverage_pct": round(filled / total_required * 100) if total_required > 0 else 0,
+        })
+
     return {
-        "message": f"Candidate {candidate.full_name} released from project successfully",
-        "assigned_project_id": None,
-        "assigned_project_name": None
+        "as_of": today.isoformat(),
+        "summary": {
+            "total_candidates": len(all_candidates),
+            "active_assignments": len(active),
+            "upcoming_assignments": len(upcoming),
+            "past_assignments": len(past),
+            "unscheduled_assignments": len(unscheduled),
+            "available_candidates": len(available),
+        },
+        "active_assignments": active,
+        "upcoming_assignments": upcoming,
+        "past_assignments": past,
+        "unscheduled_assignments": unscheduled,
+        "available_candidates": available,
+        "project_coverage": project_coverage,
     }
