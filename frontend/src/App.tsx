@@ -1268,7 +1268,7 @@ export default function App() {
                           onClick={() => handleToggleBlacklist(candidate)}
                           className={`flex items-center gap-1 py-1.5 px-2 rounded border text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 ${
                             candidate.is_blacklisted
-                              ? 'bg-cyber-magenta/10 border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20'
+                              ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20'
                               : 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/20'
                           }`}
                           title={candidate.is_blacklisted ? 'Whitelist candidate record' : 'Blacklist candidate record'}
