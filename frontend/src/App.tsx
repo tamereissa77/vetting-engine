@@ -3,7 +3,8 @@ import {
    Shield, Activity, Database, Cpu, Layers, Terminal, Plus, 
    Trash2, Edit, UploadCloud, Linkedin, CheckCircle2, 
    AlertTriangle, User, Mail, FileText, Sparkles, Network,
-   UserX, UserCheck, ClipboardList, AlertCircle
+   UserX, UserCheck, ClipboardList, AlertCircle,
+   ChevronDown, ChevronUp
  } from 'lucide-react';
 import { api, TalentProfile, Candidate, CandidateDetails } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
@@ -62,6 +63,41 @@ export default function App() {
     }
     return true;
   });
+
+  const [expandedProfiles, setExpandedProfiles] = useState<Record<number, boolean>>({});
+  const [expandedCandidates, setExpandedCandidates] = useState<Record<number, boolean>>({});
+
+  const toggleProfileExpanded = (id: number) => {
+    setExpandedProfiles((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleCandidateExpanded = (id: number) => {
+    setExpandedCandidates((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const expandAllProfiles = () => {
+    const next: Record<number, boolean> = {};
+    profiles.forEach((p) => {
+      if (p.id) next[p.id] = true;
+    });
+    setExpandedProfiles(next);
+  };
+
+  const collapseAllProfiles = () => {
+    setExpandedProfiles({});
+  };
+
+  const expandAllCandidates = () => {
+    const next: Record<number, boolean> = {};
+    filteredCandidates.forEach((c) => {
+      if (c.id) next[c.id] = true;
+    });
+    setExpandedCandidates(next);
+  };
+
+  const collapseAllCandidates = () => {
+    setExpandedCandidates({});
+  };
 
   // Computed candidate list for the left archive ledger panel
   const ledgerCandidates = candidates.filter(candidate => {
@@ -155,13 +191,17 @@ export default function App() {
   // Profile Save (Create / Update)
   const handleSaveProfile = async (profilePayload: TalentProfile) => {
     try {
+      let saved: TalentProfile;
       if (profilePayload.id) {
-        await api.updateProfile(profilePayload.id, profilePayload);
+        saved = await api.updateProfile(profilePayload.id, profilePayload);
       } else {
-        await api.createProfile(profilePayload);
+        saved = await api.createProfile(profilePayload);
       }
       setIsModalOpen(false);
       fetchProfiles();
+      if (saved && saved.id) {
+        setExpandedProfiles((prev) => ({ ...prev, [saved.id!]: true }));
+      }
     } catch (err: any) {
       alert(err.message || 'Operation failed');
     }
@@ -180,13 +220,17 @@ export default function App() {
   // Candidate Save & Delete CRUD Handlers
   const handleSaveCandidate = async (payload: Partial<Candidate>) => {
     try {
+      let saved: Candidate;
       if (payload.id) {
-        await api.updateCandidate(payload.id, payload);
+        saved = await api.updateCandidate(payload.id, payload);
       } else {
-        await api.createCandidate(payload);
+        saved = await api.createCandidate(payload);
       }
       setIsCandidateModalOpen(false);
       fetchCandidates();
+      if (saved && saved.id) {
+        setExpandedCandidates((prev) => ({ ...prev, [saved.id]: true }));
+      }
       if (selectedCandidateId === payload.id && selectedCandidateId !== null) {
         fetchCandidateDetails(selectedCandidateId);
       }
@@ -493,92 +537,134 @@ export default function App() {
                     Admin register for vetting benchmarks and requirements criteria.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setModalInitialProfile(null);
-                    setIsModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-cyber-cyan/20 to-cyber-magenta/20 hover:from-cyber-cyan/30 hover:to-cyber-magenta/30 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-xs uppercase tracking-wider flex items-center gap-2 btn-cyan-glow transition-all"
-                >
-                  <Plus size={16} />
-                  <span>Add Target Role</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-cyber-dark border border-cyber-slate/50 rounded p-1 font-mono text-[10px]">
+                    <button
+                      onClick={expandAllProfiles}
+                      className="px-2 py-1 hover:text-cyber-cyan text-slate-400 rounded transition-colors"
+                    >
+                      Expand All
+                    </button>
+                    <span className="text-slate-600 px-1">|</span>
+                    <button
+                      onClick={collapseAllProfiles}
+                      className="px-2 py-1 hover:text-cyber-cyan text-slate-400 rounded transition-colors"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setModalInitialProfile(null);
+                      setIsModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-cyber-cyan/20 to-cyber-magenta/20 hover:from-cyber-cyan/30 hover:to-cyber-magenta/30 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-xs uppercase tracking-wider flex items-center gap-2 btn-cyan-glow transition-all"
+                  >
+                    <Plus size={16} />
+                    <span>Add Target Role</span>
+                  </button>
+                </div>
               </div>
 
               {/* Profiles Grid */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                {profiles.map((profile) => (
-                  <div 
-                    key={profile.id}
-                    className="cyber-panel rounded-lg p-5 flex flex-col justify-between group hover:border-cyber-cyan/40 transition-all duration-300"
-                  >
-                    <div>
-                      {/* Card Header */}
-                      <div className="flex items-start justify-between gap-4 border-b border-cyber-slate/30 pb-3 mb-3">
-                        <div>
-                          <span className="px-2 py-0.5 bg-cyber-dark text-slate-300 border border-cyber-slate rounded-full text-[9px] font-mono tracking-wider uppercase">
-                            {profile.stack_layer}
-                          </span>
-                          <h4 className="text-base font-bold font-sans text-slate-100 group-hover:text-cyber-cyan transition-colors mt-1">
-                            {profile.role_name}
-                          </h4>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                {profiles.map((profile) => {
+                  const isExpanded = !!expandedProfiles[profile.id!];
+                  return (
+                    <div 
+                      key={profile.id}
+                      className="cyber-panel rounded-lg p-5 flex flex-col justify-between group hover:border-cyber-cyan/40 transition-all duration-300"
+                    >
+                      <div>
+                        {/* Card Header */}
+                        <div 
+                          onClick={() => toggleProfileExpanded(profile.id!)}
+                          className="flex items-start justify-between gap-4 border-b border-cyber-slate/30 pb-3 mb-3 cursor-pointer select-none"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 bg-cyber-dark text-slate-300 border border-cyber-slate rounded-full text-[9px] font-mono tracking-wider uppercase">
+                                {profile.stack_layer}
+                              </span>
+                              <span className="px-2 py-0.5 bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta rounded text-[9px] font-mono uppercase tracking-wider">
+                                {profile.engagement_tier}
+                              </span>
+                            </div>
+                            <h4 className="text-base font-bold font-sans text-slate-100 group-hover:text-cyber-cyan transition-colors mt-1.5">
+                              {profile.role_name}
+                            </h4>
+                          </div>
+                          <div className="p-1 text-slate-400 group-hover:text-cyber-cyan transition-colors rounded hover:bg-cyber-gray/50">
+                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                          </div>
                         </div>
-                        <span className="px-2 py-1 bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta rounded text-[10px] font-mono uppercase tracking-wider">
-                          {profile.engagement_tier}
-                        </span>
+
+                        {/* Summary */}
+                        <p 
+                          onClick={() => toggleProfileExpanded(profile.id!)}
+                          className={`text-xs text-slate-300 leading-relaxed font-sans mb-4 cursor-pointer ${
+                            !isExpanded ? 'line-clamp-2' : ''
+                          }`}
+                        >
+                          {profile.role_summary}
+                        </p>
+
+                        {/* Expanded details */}
+                        {isExpanded && (
+                          <>
+                            {/* Red Flags warning box */}
+                            <div className="bg-cyber-magenta/5 border border-cyber-magenta/20 rounded p-3 mb-4">
+                              <div className="text-[10px] font-mono uppercase tracking-widest text-cyber-magenta flex items-center gap-1.5 mb-1.5">
+                                <AlertTriangle size={12} />
+                                <span>Screen-Out Red Flags</span>
+                              </div>
+                              <ul className="text-[11px] text-slate-300 space-y-1 pl-4 list-disc font-sans">
+                                {profile.red_flags
+                                  .split(/[;\n]+/)
+                                  .map((f) => f.replace(/^-\s*/, '').trim())
+                                  .filter(Boolean)
+                                  .map((flag, idx) => (
+                                    <li key={idx} className="leading-tight">
+                                      {flag}
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+
+                            {/* Offerings if present */}
+                            {profile.offerings && (
+                              <div className="text-[11px] font-sans text-slate-400 bg-cyber-slate/20 rounded p-2.5 mb-4 border border-cyber-slate/30">
+                                <strong className="text-slate-300 font-mono text-[9px] uppercase tracking-wider block mb-1">MAPPED DELIVERABLES:</strong>
+                                {profile.offerings}
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
 
-                      {/* Summary */}
-                      <p className="text-xs text-slate-300 leading-relaxed font-sans mb-4">
-                        {profile.role_summary}
-                      </p>
-
-                      {/* Red Flags warning box */}
-                      <div className="bg-cyber-magenta/5 border border-cyber-magenta/20 rounded p-3 mb-4">
-                        <div className="text-[10px] font-mono uppercase tracking-widest text-cyber-magenta flex items-center gap-1.5 mb-1.5">
-                          <AlertTriangle size={12} />
-                          <span>Screen-Out Red Flags</span>
-                        </div>
-                        <ul className="text-[11px] text-slate-300 space-y-1 pl-4 list-disc font-sans">
-                          {profile.red_flags.split(';').map((flag, idx) => (
-                            <li key={idx} className="leading-tight">
-                              {flag.trim()}
-                            </li>
-                          ))}
-                        </ul>
+                      {/* Actions */}
+                      <div className="flex justify-end gap-3 pt-3 border-t border-cyber-slate/20 mt-2">
+                        <button
+                          onClick={() => {
+                            setModalInitialProfile(profile);
+                            setIsModalOpen(true);
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-cyber-cyan border border-transparent hover:border-cyber-cyan/20 rounded transition-colors"
+                          title="Edit profile criteria"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProfile(profile.id!)}
+                          className="p-1.5 text-slate-400 hover:text-cyber-magenta border border-transparent hover:border-cyber-magenta/20 rounded transition-colors"
+                          title="Purge profile"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-
-                      {/* Offerings if present */}
-                      {profile.offerings && (
-                        <div className="text-[11px] font-sans text-slate-400 bg-cyber-slate/20 rounded p-2.5 mb-4 border border-cyber-slate/30">
-                          <strong className="text-slate-300 font-mono text-[9px] uppercase tracking-wider block mb-1">MAPPED DELIVERABLES:</strong>
-                          {profile.offerings}
-                        </div>
-                      )}
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex justify-end gap-3 pt-3 border-t border-cyber-slate/20 mt-2">
-                      <button
-                        onClick={() => {
-                          setModalInitialProfile(profile);
-                          setIsModalOpen(true);
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-cyber-cyan border border-transparent hover:border-cyber-cyan/20 rounded transition-colors"
-                        title="Edit profile criteria"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteProfile(profile.id!)}
-                        className="p-1.5 text-slate-400 hover:text-cyber-magenta border border-transparent hover:border-cyber-magenta/20 rounded transition-colors"
-                        title="Purge profile"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {profiles.length === 0 && (
                   <div className="col-span-full py-16 text-center border border-dashed border-cyber-slate rounded-lg">
@@ -1100,16 +1186,33 @@ export default function App() {
                     System directory for candidate registrations, profile configurations, and blacklist policies.
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setModalInitialCandidate(null);
-                    setIsCandidateModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-gradient-to-r from-cyber-magenta/20 to-cyber-cyan/20 hover:from-cyber-magenta/30 hover:to-cyber-cyan/30 border border-cyber-magenta/30 text-cyber-magenta hover:text-white rounded font-mono text-xs uppercase tracking-wider flex items-center gap-2 shadow-magenta-glow transition-all"
-                >
-                  <Plus size={16} />
-                  <span>Index Candidate</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center bg-cyber-dark border border-cyber-slate/50 rounded p-1 font-mono text-[10px]">
+                    <button
+                      onClick={expandAllCandidates}
+                      className="px-2 py-1 hover:text-cyber-cyan text-slate-400 rounded transition-colors"
+                    >
+                      Expand All
+                    </button>
+                    <span className="text-slate-600 px-1">|</span>
+                    <button
+                      onClick={collapseAllCandidates}
+                      className="px-2 py-1 hover:text-cyber-cyan text-slate-400 rounded transition-colors"
+                    >
+                      Collapse All
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setModalInitialCandidate(null);
+                      setIsCandidateModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-cyber-magenta/20 to-cyber-cyan/20 hover:from-cyber-magenta/30 hover:to-cyber-cyan/30 border border-cyber-magenta/30 text-cyber-magenta hover:text-white rounded font-mono text-xs uppercase tracking-wider flex items-center gap-2 shadow-magenta-glow transition-all"
+                  >
+                    <Plus size={16} />
+                    <span>Index Candidate</span>
+                  </button>
+                </div>
               </div>
 
               {/* Ledger Vetting Filters */}
@@ -1177,8 +1280,9 @@ export default function App() {
               </div>
 
               {/* Candidates Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                 {filteredCandidates.map((candidate) => {
+                  const isExpanded = !!expandedCandidates[candidate.id];
                   return (
                     <div 
                       key={candidate.id}
@@ -1190,8 +1294,11 @@ export default function App() {
                     >
                       <div>
                         {/* Name and Status Header */}
-                        <div className="flex items-start justify-between gap-4 border-b border-cyber-slate/30 pb-3 mb-3">
-                          <div className="truncate">
+                        <div 
+                          onClick={() => toggleCandidateExpanded(candidate.id)}
+                          className="flex items-start justify-between gap-4 border-b border-cyber-slate/30 pb-3 mb-3 cursor-pointer select-none"
+                        >
+                          <div className="truncate flex-1">
                             <h4 className="text-sm font-bold font-sans text-slate-100 truncate">
                               {candidate.full_name}
                             </h4>
@@ -1199,13 +1306,18 @@ export default function App() {
                               {candidate.email || 'No email registered'}
                             </span>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
-                            candidate.is_blacklisted 
-                              ? 'bg-cyber-magenta/25 text-cyber-magenta border border-cyber-magenta/30 animate-pulse' 
-                              : 'bg-cyber-green/10 text-cyber-green border border-cyber-green/20'
-                          }`}>
-                            {candidate.is_blacklisted ? 'Deviant' : 'Compliant'}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
+                              candidate.is_blacklisted 
+                                ? 'bg-cyber-magenta/25 text-cyber-magenta border border-cyber-magenta/30 animate-pulse' 
+                                : 'bg-cyber-green/10 text-cyber-green border border-cyber-green/20'
+                            }`}>
+                              {candidate.is_blacklisted ? 'Deviant' : 'Compliant'}
+                            </span>
+                            <div className="p-0.5 text-slate-400 rounded hover:bg-cyber-gray/50 transition-colors">
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Experience and Skills */}
@@ -1215,26 +1327,30 @@ export default function App() {
                             <span className="text-slate-200">{candidate.experience_years} Years</span>
                           </div>
 
-                          <div>
-                            <span className="text-[9px] font-mono text-slate-400 block mb-1">CAPABILITY LEDGER TAGS:</span>
-                            {candidate.skills && candidate.skills.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {candidate.skills.map((s) => (
-                                  <span key={s} className="px-1.5 py-0.5 bg-cyber-dark/80 text-[8px] text-slate-400 border border-cyber-slate font-mono rounded">
-                                    {s}
-                                  </span>
-                                ))}
+                          {isExpanded && (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-mono text-slate-400 block mb-1">CAPABILITY LEDGER TAGS:</span>
+                                {candidate.skills && candidate.skills.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {candidate.skills.map((s) => (
+                                      <span key={s} className="px-1.5 py-0.5 bg-cyber-dark/80 text-[8px] text-slate-400 border border-cyber-slate font-mono rounded">
+                                        {s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-sans text-slate-500 italic block">No tags parsed yet.</span>
+                                )}
                               </div>
-                            ) : (
-                              <span className="text-[10px] font-sans text-slate-500 italic block">No tags parsed yet.</span>
-                            )}
-                          </div>
 
-                          {candidate.linkedin_url && (
-                            <div className="text-[10px] font-mono text-cyber-cyan truncate flex items-center gap-1 mt-2">
-                              <Linkedin size={10} />
-                              <span className="truncate">{candidate.linkedin_url}</span>
-                            </div>
+                              {candidate.linkedin_url && (
+                                <div className="text-[10px] font-mono text-cyber-cyan truncate flex items-center gap-1 mt-2">
+                                  <Linkedin size={10} />
+                                  <span className="truncate">{candidate.linkedin_url}</span>
+                                </div>
+                              )}
+                            </>
                           )}
 
                           {/* Best Vetting Fit */}
