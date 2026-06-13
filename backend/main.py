@@ -68,6 +68,18 @@ class ProjectCreateSchema(BaseModel):
     analysis_results: Dict[str, Any]
 
 
+class ProjectCandidateSchema(BaseModel):
+    id: int
+    full_name: str
+    email: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    skills: List[str] = []
+    experience_years: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+
 class ProjectSchema(BaseModel):
     id: int
     name: str
@@ -75,6 +87,7 @@ class ProjectSchema(BaseModel):
     sow_filename: Optional[str] = None
     analysis_results: Dict[str, Any]
     created_at: datetime
+    assigned_resources: Optional[List[ProjectCandidateSchema]] = []
 
     class Config:
         from_attributes = True
@@ -213,9 +226,12 @@ def get_candidates(database: Session = Depends(db.get_db)):
             "skills": c.skills,
             "experience_years": c.experience_years,
             "is_blacklisted": c.is_blacklisted,
+            "assigned_project_id": c.assigned_project_id,
+            "assigned_project_name": c.assigned_project.name if c.assigned_project else None,
             "created_at": c.created_at,
             "highest_score": best_assessment.match_score if best_assessment else None,
-            "highest_role_name": best_assessment.profile.role_name if (best_assessment and best_assessment.profile) else None
+            "highest_role_name": best_assessment.profile.role_name if (best_assessment and best_assessment.profile) else None,
+            "assessments": [{"role_name": a.profile.role_name, "match_score": a.match_score} for a in c.assessments if a.profile]
         })
     return res
 
@@ -252,6 +268,8 @@ def get_candidate_details(candidate_id: int, database: Session = Depends(db.get_
         "skills": candidate.skills,
         "experience_years": candidate.experience_years,
         "is_blacklisted": candidate.is_blacklisted,
+        "assigned_project_id": candidate.assigned_project_id,
+        "assigned_project_name": candidate.assigned_project.name if candidate.assigned_project else None,
         "cv_raw_text": candidate.cv_raw_text,
         "created_at": candidate.created_at,
         "assessments": assessment_list
@@ -279,6 +297,8 @@ def create_candidate(candidate: CandidateCreateUpdateSchema, database: Session =
         "skills": db_cand.skills,
         "experience_years": db_cand.experience_years,
         "is_blacklisted": db_cand.is_blacklisted,
+        "assigned_project_id": db_cand.assigned_project_id,
+        "assigned_project_name": db_cand.assigned_project.name if db_cand.assigned_project else None,
         "created_at": db_cand.created_at
     }
 
@@ -305,6 +325,8 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
         "skills": db_cand.skills,
         "experience_years": db_cand.experience_years,
         "is_blacklisted": db_cand.is_blacklisted,
+        "assigned_project_id": db_cand.assigned_project_id,
+        "assigned_project_name": db_cand.assigned_project.name if db_cand.assigned_project else None,
         "created_at": db_cand.created_at
     }
 
@@ -526,7 +548,20 @@ async def analyze_project_scope(
 
 @app.get("/api/projects", response_model=List[ProjectSchema])
 def get_projects(database: Session = Depends(db.get_db)):
-    return database.query(db.Project).order_by(db.Project.created_at.desc()).all()
+    projects = database.query(db.Project).order_by(db.Project.created_at.desc()).all()
+    res = []
+    for p in projects:
+        cands = database.query(db.Candidate).filter(db.Candidate.assigned_project_id == p.id).all()
+        res.append({
+            "id": p.id,
+            "name": p.name,
+            "sow_text": p.sow_text,
+            "sow_filename": p.sow_filename,
+            "analysis_results": p.analysis_results,
+            "created_at": p.created_at,
+            "assigned_resources": cands
+        })
+    return res
 
 
 @app.get("/api/projects/{project_id}", response_model=ProjectSchema)
@@ -534,7 +569,16 @@ def get_project(project_id: int, database: Session = Depends(db.get_db)):
     project = database.query(db.Project).filter(db.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    cands = database.query(db.Candidate).filter(db.Candidate.assigned_project_id == project.id).all()
+    return {
+        "id": project.id,
+        "name": project.name,
+        "sow_text": project.sow_text,
+        "sow_filename": project.sow_filename,
+        "analysis_results": project.analysis_results,
+        "created_at": project.created_at,
+        "assigned_resources": cands
+    }
 
 
 @app.post("/api/projects", response_model=ProjectSchema)
@@ -548,7 +592,15 @@ def create_project(project_in: ProjectCreateSchema, database: Session = Depends(
     database.add(project)
     database.commit()
     database.refresh(project)
-    return project
+    return {
+        "id": project.id,
+        "name": project.name,
+        "sow_text": project.sow_text,
+        "sow_filename": project.sow_filename,
+        "analysis_results": project.analysis_results,
+        "created_at": project.created_at,
+        "assigned_resources": []
+    }
 
 
 @app.delete("/api/projects/{project_id}")
@@ -559,3 +611,46 @@ def delete_project(project_id: int, database: Session = Depends(db.get_db)):
     database.delete(project)
     database.commit()
     return {"message": f"Project {project_id} deleted successfully"}
+
+
+# Project Assignment Endpoints
+
+@app.post("/api/projects/{project_id}/assign/{candidate_id}")
+def assign_candidate_to_project(project_id: int, candidate_id: int, database: Session = Depends(db.get_db)):
+    project = database.query(db.Project).filter(db.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    candidate = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    if candidate.assigned_project_id is not None and candidate.assigned_project_id != project_id:
+        current_project = database.query(db.Project).filter(db.Project.id == candidate.assigned_project_id).first()
+        proj_name = current_project.name if current_project else "another project"
+        raise HTTPException(status_code=400, detail=f"Candidate is already assigned to project '{proj_name}'")
+        
+    candidate.assigned_project_id = project_id
+    database.commit()
+    database.refresh(candidate)
+    return {
+        "message": f"Candidate {candidate.full_name} assigned to project '{project.name}' successfully",
+        "assigned_project_id": candidate.assigned_project_id,
+        "assigned_project_name": project.name
+    }
+
+
+@app.post("/api/projects/release/{candidate_id}")
+def release_candidate_from_project(candidate_id: int, database: Session = Depends(db.get_db)):
+    candidate = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+        
+    candidate.assigned_project_id = None
+    database.commit()
+    database.refresh(candidate)
+    return {
+        "message": f"Candidate {candidate.full_name} released from project successfully",
+        "assigned_project_id": None,
+        "assigned_project_name": None
+    }

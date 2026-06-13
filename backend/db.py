@@ -50,9 +50,11 @@ class Candidate(Base):
     skills = Column(ARRAY(String), default=[], server_default='{}')
     experience_years = Column(Integer, nullable=True)
     is_blacklisted = Column(Boolean, default=False)
+    assigned_project_id = Column(Integer, ForeignKey('projects.id', ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     assessments = relationship("Assessment", back_populates="candidate", cascade="all, delete-orphan")
+    assigned_project = relationship("Project", foreign_keys=[assigned_project_id])
 
 
 class Assessment(Base):

@@ -183,6 +183,20 @@ PROFILES_DATA = [
 def seed_database():
     print("Creating database tables if missing...")
     Base.metadata.create_all(bind=engine)
+
+    # Ensure assigned_project_id exists in candidates
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assigned_project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;"))
+        db.commit()
+        print("Ensured candidates.assigned_project_id column exists.")
+    except Exception as e:
+        print(f"Error checking/creating candidates.assigned_project_id: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
     print("Seeding database with OriginCraft Talent Profiles...")
     db = SessionLocal()
     try:

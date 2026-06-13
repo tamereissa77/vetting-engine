@@ -19,9 +19,12 @@ export interface Candidate {
   skills: string[];
   experience_years: number;
   is_blacklisted: boolean;
+  assigned_project_id?: number | null;
+  assigned_project_name?: string | null;
   created_at: string;
   highest_score?: number | null;
   highest_role_name?: string | null;
+  assessments?: Array<{ role_name: string; match_score: number }>;
 }
 
 export interface Assessment {
@@ -60,6 +63,7 @@ export interface Project {
     missing_profiles: TalentProfile[];
   };
   created_at: string;
+  assigned_resources?: Candidate[];
 }
 
 export const api = {
@@ -284,5 +288,27 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete project');
+  },
+
+  async assignCandidateToProject(projectId: number, candidateId: number): Promise<any> {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}/assign/${candidateId}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to assign candidate');
+    }
+    return res.json();
+  },
+
+  async releaseCandidateFromProject(candidateId: number): Promise<any> {
+    const res = await fetch(`${API_URL}/api/projects/release/${candidateId}`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to release candidate');
+    }
+    return res.json();
   }
 };

@@ -27,7 +27,7 @@ const STACK_LAYERS_FILTER = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner'>('profiles');
+  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner' | 'projects'>('profiles');
   const [selectedLayer, setSelectedLayer] = useState<string>('');
 
   // SOW Planner States
@@ -44,6 +44,7 @@ export default function App() {
   // Project States
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [activeViewProjectId, setActiveViewProjectId] = useState<number | null>(null);
   const [projectName, setProjectName] = useState('');
   const [isSavingProject, setIsSavingProject] = useState(false);
 
@@ -124,6 +125,34 @@ export default function App() {
       }
     } catch (err: any) {
       alert(`Failed to delete project: ${err.message || err}`);
+    }
+  };
+
+  const handleAssignCandidate = async (projectId: number, candidateId: number) => {
+    try {
+      await api.assignCandidateToProject(projectId, candidateId);
+      fetchCandidates();
+      if (selectedProjectId) {
+        const list = await api.listProjects();
+        setProjects(list);
+        handleLoadProject(selectedProjectId, list);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to assign candidate');
+    }
+  };
+
+  const handleReleaseCandidate = async (candidateId: number) => {
+    try {
+      await api.releaseCandidateFromProject(candidateId);
+      fetchCandidates();
+      if (selectedProjectId) {
+        const list = await api.listProjects();
+        setProjects(list);
+        handleLoadProject(selectedProjectId, list);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to release candidate');
     }
   };
 
@@ -566,6 +595,60 @@ export default function App() {
             </p>
           </div>
         </div>
+
+        {/* Top-Center Navigation Tabs */}
+        <div className="flex items-center gap-1.5 p-1 bg-cyber-gray border border-cyber-slate rounded-lg select-none">
+          <button
+            onClick={() => setActiveTab('profiles')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'profiles' 
+                ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Profiles
+          </button>
+          <button
+            onClick={() => setActiveTab('vetting')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'vetting' 
+                ? 'bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta font-bold shadow-magenta-glow' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Vetting
+          </button>
+          <button
+            onClick={() => setActiveTab('candidates')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'candidates' 
+                ? 'bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta font-bold shadow-magenta-glow' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Registry
+          </button>
+          <button
+            onClick={() => setActiveTab('planner')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'planner' 
+                ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Planner
+          </button>
+          <button
+            onClick={() => setActiveTab('projects')}
+            className={`px-3 py-1.5 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+              activeTab === 'projects' 
+                ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Projects
+          </button>
+        </div>
         
         {/* Status Indicators */}
         <div className="flex items-center gap-6 text-xs font-mono">
@@ -593,49 +676,6 @@ export default function App() {
         
         {/* Left Panel: 5-Layer Sovereign AI Stack Sidebar */}
         <aside className="w-full md:w-80 border-r border-cyber-slate/40 bg-cyber-dark/40 p-4 flex flex-col gap-6 select-none">
-          {/* Navigation Tabs */}
-          <div className="grid grid-cols-4 gap-1.5 p-1 bg-cyber-gray border border-cyber-slate rounded-lg">
-            <button
-              onClick={() => setActiveTab('profiles')}
-              className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
-                activeTab === 'profiles' 
-                  ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Profiles
-            </button>
-            <button
-              onClick={() => setActiveTab('vetting')}
-              className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
-                activeTab === 'vetting' 
-                  ? 'bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta font-bold shadow-magenta-glow' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Vetting
-            </button>
-            <button
-              onClick={() => setActiveTab('candidates')}
-              className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
-                activeTab === 'candidates' 
-                  ? 'bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta font-bold shadow-magenta-glow' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Registry
-            </button>
-            <button
-              onClick={() => setActiveTab('planner')}
-              className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
-                activeTab === 'planner' 
-                  ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Planner
-            </button>
-          </div>
 
           {/* 5-Layer Visual Stack representation */}
           <div className="flex-1 flex flex-col gap-2">
@@ -1506,7 +1546,14 @@ export default function App() {
                               {candidate.email || 'No email registered'}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
+                              candidate.assigned_project_id
+                                ? 'bg-cyber-magenta/15 text-cyber-magenta border border-cyber-magenta/30 shadow-magenta-glow/20'
+                                : 'bg-cyber-green/15 text-cyber-green border border-cyber-green/30'
+                            }`}>
+                              {candidate.assigned_project_id ? `Assigned: ${candidate.assigned_project_name}` : 'Available'}
+                            </span>
                             <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
                               candidate.is_blacklisted 
                                 ? 'bg-cyber-magenta/25 text-cyber-magenta border border-cyber-magenta/30 animate-pulse' 
@@ -1578,20 +1625,32 @@ export default function App() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex justify-between items-center gap-2 pt-3 border-t border-cyber-slate/20 mt-2">
+                      <div className="flex justify-between items-center gap-2 pt-3 border-t border-cyber-slate/20 mt-2 flex-wrap">
                         {/* Blacklist toggle */}
-                        <button
-                          onClick={() => handleToggleBlacklist(candidate)}
-                          className={`flex items-center gap-1 py-1.5 px-2 rounded border text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 ${
-                            candidate.is_blacklisted
-                              ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20'
-                              : 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/20'
-                          }`}
-                          title={candidate.is_blacklisted ? 'Whitelist candidate record' : 'Blacklist candidate record'}
-                        >
-                          {candidate.is_blacklisted ? <UserCheck size={10} className="shrink-0" /> : <UserX size={10} className="shrink-0" />}
-                          <span>{candidate.is_blacklisted ? 'BLACKLISTED (whitelist)' : 'BLACKLIST'}</span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleToggleBlacklist(candidate)}
+                            className={`flex items-center gap-1 py-1.5 px-2 rounded border text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 ${
+                              candidate.is_blacklisted
+                                ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20'
+                                : 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan hover:bg-cyber-cyan/20'
+                            }`}
+                            title={candidate.is_blacklisted ? 'Whitelist candidate record' : 'Blacklist candidate record'}
+                          >
+                            {candidate.is_blacklisted ? <UserCheck size={10} className="shrink-0" /> : <UserX size={10} className="shrink-0" />}
+                            <span>{candidate.is_blacklisted ? 'BLACKLISTED (whitelist)' : 'BLACKLIST'}</span>
+                          </button>
+
+                          {candidate.assigned_project_id && (
+                            <button
+                              onClick={() => handleReleaseCandidate(candidate.id)}
+                              className="flex items-center gap-1 py-1.5 px-2 rounded border border-cyber-magenta/30 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 text-cyber-magenta hover:text-white text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 font-bold"
+                              title={`Release from project: ${candidate.assigned_project_name}`}
+                            >
+                              <span>RELEASE RESOURCE</span>
+                            </button>
+                          )}
+                        </div>
 
                         <div className="flex items-center gap-2">
                           <button
@@ -1826,14 +1885,86 @@ export default function App() {
                         
                         <div className="space-y-2">
                           {plannerResults.matched_profiles.map((match) => (
-                            <div key={match.id} className="p-3 bg-cyber-dark/50 border border-cyber-slate/40 rounded flex flex-col md:flex-row justify-between gap-3 items-start md:items-center">
-                              <div className="flex-1">
-                                <h4 className="text-xs font-bold text-slate-200">{match.role_name}</h4>
-                                <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">{match.relevance_reason}</p>
+                            <div key={match.id} className="p-3 bg-cyber-dark/50 border border-cyber-slate/40 rounded flex flex-col gap-3 items-start w-full">
+                              <div className="flex flex-col md:flex-row justify-between gap-3 items-start md:items-center w-full">
+                                <div className="flex-1">
+                                  <h4 className="text-xs font-bold text-slate-200">{match.role_name}</h4>
+                                  <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">{match.relevance_reason}</p>
+                                </div>
+                                <span className="px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/20 text-cyber-cyan rounded text-[8px] font-mono uppercase tracking-widest shrink-0">
+                                  Active Profile
+                                </span>
                               </div>
-                              <span className="px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/20 text-cyber-cyan rounded text-[8px] font-mono uppercase tracking-widest shrink-0 self-start md:self-auto">
-                                Active Profile
-                              </span>
+
+                              {/* Vetted Matching Candidates for SOW Profile */}
+                              <div className="mt-2 w-full border-t border-cyber-slate/20 pt-2.5">
+                                <span className="text-[9px] font-mono text-slate-400 block mb-1.5 uppercase tracking-wider">Vetting Archive Matches:</span>
+                                {(() => {
+                                  const matchingCands = candidates.filter((c) => 
+                                    c.assessments && c.assessments.some((a) => a.role_name === match.role_name)
+                                  );
+                                  
+                                  if (matchingCands.length === 0) {
+                                    return (
+                                      <p className="text-[10px] font-sans text-slate-500 italic">No candidates assessed for this role yet. Vet a candidate in the Vetting tab first.</p>
+                                    );
+                                  }
+                                  
+                                  return (
+                                    <div className="space-y-1.5 w-full">
+                                      {matchingCands.map((c) => {
+                                        const matchingAssessment = c.assessments?.find((a) => a.role_name === match.role_name);
+                                        const score = matchingAssessment?.match_score || 0;
+                                        const isAssigned = c.assigned_project_id !== null;
+                                        const isAssignedHere = c.assigned_project_id === selectedProjectId;
+                                        
+                                        return (
+                                          <div key={c.id} className="flex justify-between items-center gap-3 bg-cyber-dark/80 border border-cyber-slate/30 p-2 rounded text-[11px] w-full">
+                                            <div className="flex items-center gap-2 truncate">
+                                              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                !isAssigned ? 'bg-cyber-green' : isAssignedHere ? 'bg-cyber-cyan animate-pulse' : 'bg-cyber-magenta'
+                                              }`} />
+                                              <span className="font-bold text-slate-300 truncate">{c.full_name}</span>
+                                              <span className="text-[9px] text-slate-500 shrink-0">({c.experience_years}y exp)</span>
+                                              <span className={`text-[10px] font-bold font-mono shrink-0 ${
+                                                score >= 80 ? 'text-cyber-green' : score >= 60 ? 'text-cyber-cyan' : 'text-cyber-yellow'
+                                              }`}>
+                                                {score}% Match
+                                              </span>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2 shrink-0">
+                                              {isAssignedHere ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleReleaseCandidate(c.id)}
+                                                  className="px-2 py-1 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors font-bold"
+                                                >
+                                                  Release
+                                                </button>
+                                              ) : isAssigned ? (
+                                                <span className="text-[9px] font-mono text-cyber-magenta bg-cyber-magenta/10 border border-cyber-magenta/20 px-2 py-0.5 rounded truncate max-w-[120px]" title={`Assigned to ${c.assigned_project_name}`}>
+                                                  Assigned: {c.assigned_project_name}
+                                                </span>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  disabled={!selectedProjectId}
+                                                  onClick={() => selectedProjectId && handleAssignCandidate(selectedProjectId, c.id)}
+                                                  className="px-2 py-1 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/35 text-cyber-cyan hover:text-white disabled:opacity-40 disabled:pointer-events-none rounded font-mono text-[9px] uppercase tracking-wider transition-colors font-bold"
+                                                  title={!selectedProjectId ? "Save this SOW Project workspace before assigning candidates" : "Assign candidate to project"}
+                                                >
+                                                  Assign
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             </div>
                           ))}
 
@@ -1932,6 +2063,301 @@ export default function App() {
                   )}
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Projects Management Workspace */}
+          {activeTab === 'projects' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-bold text-cyber-cyan uppercase tracking-wider font-mono">
+                  Sovereign Projects Registry
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 font-sans">
+                  Browse and audit air-gapped project allocations, resource compliance, and SOW blueprints.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left side: Projects index */}
+                <div className="lg:col-span-4 space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+                  <span className="text-[10px] font-mono text-slate-400 block uppercase tracking-widest">
+                    Saved Workspaces ({projects.length})
+                  </span>
+                  
+                  {projects.length === 0 ? (
+                    <div className="cyber-panel p-6 text-center text-slate-500 italic text-xs">
+                      No projects saved yet. Analyze an SOW in the Planner tab and save it as a project workspace.
+                    </div>
+                  ) : (
+                    projects.map((p) => {
+                      const isSelected = activeViewProjectId === p.id;
+                      const matchedCount = p.analysis_results?.matched_profiles?.length || 0;
+                      const missingCount = p.analysis_results?.missing_profiles?.length || 0;
+                      const resourcesCount = candidates.filter(c => c.assigned_project_id === p.id).length;
+                      
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => setActiveViewProjectId(p.id)}
+                          className={`p-4 rounded-lg border transition-all cursor-pointer select-none relative group ${
+                            isSelected 
+                              ? 'bg-cyber-cyan/10 border-cyber-cyan text-cyber-cyan shadow-cyan-glow font-bold' 
+                              : 'bg-cyber-gray/40 border-cyber-slate/30 text-slate-300 hover:border-cyber-slate hover:bg-cyber-gray/70'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-3">
+                            <h3 className="text-xs font-bold font-mono tracking-wide truncate pr-6">
+                              {p.name}
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Are you sure you want to delete project '${p.name}'?`)) {
+                                  try {
+                                    await api.deleteProject(p.id);
+                                    if (activeViewProjectId === p.id) setActiveViewProjectId(null);
+                                    fetchProjects();
+                                    fetchCandidates();
+                                  } catch (err) {
+                                    alert('Failed to delete project: ' + err);
+                                  }
+                                }
+                              }}
+                              className="absolute top-3 right-3 text-slate-500 hover:text-cyber-magenta opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+                              title="Delete project"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                          
+                          <div className="mt-2 text-[10px] text-slate-400 font-sans space-y-1">
+                            <div className="flex justify-between">
+                              <span>Matched Roles:</span>
+                              <span className="font-mono font-bold text-cyber-green">{matchedCount}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Missing Gaps:</span>
+                              <span className="font-mono font-bold text-cyber-yellow">{missingCount}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Assigned Talent:</span>
+                              <span className="font-mono font-bold text-cyber-magenta">{resourcesCount}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 pt-2 border-t border-cyber-slate/20 flex justify-between items-center text-[8px] font-mono text-slate-500">
+                            <span>{p.sow_filename || 'TEXT SCOPE'}</span>
+                            <span>{new Date(p.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Right side: Project detail view */}
+                <div className="lg:col-span-8">
+                  {(() => {
+                    const activeProject = projects.find(p => p.id === activeViewProjectId);
+                    if (!activeProject) {
+                      return (
+                        <div className="cyber-panel p-12 text-center rounded-lg">
+                          <Layers className="text-slate-500 mx-auto mb-3 animate-pulse" size={36} />
+                          <p className="text-sm font-mono text-slate-400">
+                            Select a saved project from the registry list to browse its scope validation and active resource allocation.
+                          </p>
+                        </div>
+                      );
+                    }
+                    
+                    const matched = activeProject.analysis_results?.matched_profiles || [];
+                    const missing = activeProject.analysis_results?.missing_profiles || [];
+                    const assignedResources = candidates.filter(c => c.assigned_project_id === activeProject.id);
+                    
+                    return (
+                      <div className="space-y-6">
+                        {/* Project Header Info */}
+                        <div className="cyber-panel p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div>
+                            <span className="text-[9px] font-mono text-cyber-cyan uppercase tracking-widest block">
+                              Active Workspace Details
+                            </span>
+                            <h3 className="text-sm font-bold font-mono text-slate-200 mt-0.5">
+                              {activeProject.name}
+                            </h3>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono text-slate-400 mt-1">
+                              <span>Created: {new Date(activeProject.created_at).toLocaleString()}</span>
+                              {activeProject.sow_filename && (
+                                <span className="text-cyber-green">File: {activeProject.sow_filename}</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleLoadProject(activeProject.id);
+                              setActiveTab('planner');
+                            }}
+                            className="px-3 py-1.5 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/35 text-cyber-cyan hover:text-white rounded font-mono text-[10px] uppercase tracking-wider transition-all"
+                          >
+                            Open in SOW Planner
+                          </button>
+                        </div>
+
+                        {/* Assigned resources grid */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                              Assigned Resources ({assignedResources.length})
+                            </span>
+                          </div>
+                          
+                          {assignedResources.length === 0 ? (
+                            <div className="bg-cyber-gray/30 border border-cyber-slate/30 p-6 text-center text-slate-500 italic text-xs rounded-lg">
+                              No candidate resources assigned to this project workspace yet. Select a candidate under matching profile cards in the SOW Planner to assign them.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {assignedResources.map((res) => (
+                                <div key={res.id} className="bg-cyber-dark/80 border border-cyber-slate/30 p-4 rounded-lg flex flex-col justify-between gap-3 relative group">
+                                  <div>
+                                    <div className="flex justify-between items-start gap-2">
+                                      <h4 className="text-xs font-bold text-slate-200">{res.full_name}</h4>
+                                      <span className="text-[9px] font-mono text-slate-400 bg-cyber-gray px-1.5 py-0.5 rounded">
+                                        {res.experience_years}y exp
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-400 font-sans block mt-1">
+                                      {res.email || 'No email provided'}
+                                    </span>
+                                    
+                                    <div className="mt-2.5 flex flex-wrap gap-1">
+                                      {res.skills.slice(0, 4).map((s) => (
+                                        <span key={s} className="px-1.5 py-0.5 bg-cyber-slate/20 text-slate-300 rounded text-[8px] font-mono">
+                                          {s}
+                                        </span>
+                                      ))}
+                                      {res.skills.length > 4 && (
+                                        <span className="px-1.5 py-0.5 text-slate-500 text-[8px] font-mono">
+                                          +{res.skills.length - 4} more
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="pt-2 border-t border-cyber-slate/10 flex justify-between items-center">
+                                    <span className="text-[8px] font-mono text-cyber-cyan uppercase tracking-widest">
+                                      Assigned Talent
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleReleaseCandidate(res.id)}
+                                      className="px-2 py-0.5 bg-cyber-magenta/15 hover:bg-cyber-magenta/25 border border-cyber-magenta/35 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all font-bold"
+                                    >
+                                      Release
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Split panel: Requirements Matching & Gaps */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Matched roles list */}
+                          <div className="space-y-3">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
+                              SOW Matched Profiles ({matched.length})
+                            </span>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              {matched.map((m: any, idx: number) => (
+                                <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg">
+                                  <h4 className="text-[11px] font-bold text-slate-200">{m.role_name}</h4>
+                                  <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">
+                                    {m.relevance_reason}
+                                  </p>
+                                </div>
+                              ))}
+                              {matched.length === 0 && (
+                                <div className="text-[10px] text-slate-500 italic p-3 text-center">
+                                  No matched profiles.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Missing roles gaps list */}
+                          <div className="space-y-3">
+                            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest block">
+                              Identified Missing Gaps ({missing.length})
+                            </span>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                              {missing.map((mis: any, idx: number) => {
+                                const isAdded = profiles.some(p => p.role_name === mis.role_name);
+                                return (
+                                  <div key={idx} className="p-3 bg-cyber-gray/30 border border-cyber-slate/20 rounded-lg flex justify-between items-start gap-2">
+                                    <div className="flex-1">
+                                      <h4 className="text-[11px] font-bold text-slate-200">{mis.role_name}</h4>
+                                      <span className="text-[8px] font-mono text-cyber-yellow uppercase tracking-widest block mt-0.5">
+                                        {mis.stack_layer}
+                                      </span>
+                                      <p className="text-[10px] text-slate-400 font-sans mt-1 leading-relaxed">
+                                        {mis.role_summary}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      disabled={isAdded}
+                                      onClick={async () => {
+                                        try {
+                                          await api.createProfile(mis);
+                                          fetchProfiles();
+                                        } catch (err) {
+                                          alert('Failed to add profile: ' + err);
+                                        }
+                                      }}
+                                      className={`px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider rounded border transition-all shrink-0 font-bold ${
+                                        isAdded 
+                                          ? 'border-cyber-green/35 text-cyber-green bg-cyber-green/10'
+                                          : 'border-cyber-cyan/35 text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan/20'
+                                      }`}
+                                    >
+                                      {isAdded ? 'Added' : 'Add'}
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                              {missing.length === 0 && (
+                                <div className="text-[10px] text-slate-500 italic p-3 text-center">
+                                  No missing profile gaps identified.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Collapsible raw SOW text */}
+                        {activeProject.sow_text && (
+                          <div className="border border-cyber-slate/20 rounded-lg overflow-hidden">
+                            <details className="group">
+                              <summary className="bg-cyber-gray/30 px-4 py-2.5 font-mono text-[10px] text-slate-400 uppercase tracking-widest cursor-pointer select-none flex justify-between items-center group-open:border-b group-open:border-cyber-slate/20 hover:text-slate-200 transition-colors">
+                                <span>Browse Raw SOW Blueprint</span>
+                                <span className="text-[8px] text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                              </summary>
+                              <div className="p-4 bg-cyber-dark/60 font-sans text-xs text-slate-300 whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
+                                {activeProject.sow_text}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
           )}

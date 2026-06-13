@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS candidates (
     skills TEXT[] DEFAULT '{}',
     experience_years INT,
     is_blacklisted BOOLEAN DEFAULT FALSE,
+    assigned_project_id INT REFERENCES projects(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
