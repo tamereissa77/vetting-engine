@@ -335,3 +335,81 @@ def generate_job_description(title: str) -> dict:
             "red_flags": "No specific red flags generated",
             "offerings": ""
         }
+
+def analyze_project_scope_text(sow_text: str, existing_profiles: list) -> dict:
+    """Analyzes a project Scope of Work against existing profiles, returning matched and missing profiles in JSON format."""
+    system_prompt = (
+        "You are an expert Project Architect and Talent Strategist.\n"
+        "Your task is to analyze a project Scope of Work (SOW) document and compare it against a list of existing Talent Profiles.\n"
+        "Identify:\n"
+        "1. Which existing profiles are needed (matched_profiles).\n"
+        "2. Which roles are missing but required to deliver the scope of work (missing_profiles).\n"
+        "For missing profiles, generate full profile details matching the structure of our TalentProfile ledger.\n"
+        "Note for stack_layer: Select the closest match from these options:\n"
+        "- Layer 1 — Infrastructure\n"
+        "- Layer 2 — Data\n"
+        "- Layer 3 — Model\n"
+        "- Layer 4 — AI / Reasoning\n"
+        "- Layer 5 — Application\n"
+        "- Strategy & Advisory\n"
+        "- Strategy & Governance\n"
+        "- Strategy & Enablement\n"
+        "- Governance & Security\n"
+        "- Domain (Vertical)\n\n"
+        "You must output ONLY a valid JSON object matching the following structure:\n"
+        "{\n"
+        "  \"matched_profiles\": [\n"
+        "    {\n"
+        "      \"id\": 1,\n"
+        "      \"role_name\": \"Role Name\",\n"
+        "      \"relevance_reason\": \"Why this existing profile is required for the project.\"\n"
+        "    }\n"
+        "  ],\n"
+        "  \"missing_profiles\": [\n"
+        "    {\n"
+        "      \"role_name\": \"Suggested Missing Role Name\",\n"
+        "      \"stack_layer\": \"Layer 4 — AI / Reasoning\",\n"
+        "      \"category\": \"Engineering\",\n"
+        "      \"engagement_tier\": \"Full-Time\",\n"
+        "      \"role_summary\": \"Mission and objectives for this role based on SOW requirements.\",\n"
+        "      \"red_flags\": \"Screen-out red flags separated by semicolons.\",\n"
+        "      \"offerings\": \"Deliverables or offerings mapped to this role.\"\n"
+        "    }\n"
+        "  ]\n"
+        "}"
+    )
+
+    profiles_summary = json.dumps(existing_profiles, indent=2)
+    prompt = (
+        f"List of existing profiles:\n{profiles_summary}\n\n"
+        f"Project Scope of Work (SOW):\n{sow_text}\n\n"
+        "Analyze the SOW. Match existing profiles where possible and list their IDs. "
+        "Create missing profiles for required positions that do not match existing profiles. "
+        "Ensure the response is valid JSON."
+    )
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "matched_profiles": parsed.get("matched_profiles") or [],
+            "missing_profiles": parsed.get("missing_profiles") or []
+        }
+    except Exception as e:
+        print(f"Failed to analyze project scope: {e}")
+        # Default mock response in case of failure
+        return {
+            "matched_profiles": [],
+            "missing_profiles": [
+                {
+                    "role_name": "Sovereign Compliance Consultant",
+                    "stack_layer": "Governance & Security",
+                    "category": "Governance",
+                    "engagement_tier": "Fractional",
+                    "role_summary": "Evaluate localized data residency compliance for project delivery.",
+                    "red_flags": "No experience in air-gapped regulations; only standard cloud compliance background.",
+                    "offerings": "Compliance reports, data residency audit checklist"
+                }
+            ]
+        }

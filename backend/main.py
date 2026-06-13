@@ -445,3 +445,58 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
         except Exception:
             pass
         await websocket.close()
+
+@app.post("/api/projects/analyze-scope")
+async def analyze_project_scope(
+    sow_text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    database: Session = Depends(db.get_db)
+):
+    text_content = ""
+    if file:
+        filename = file.filename
+        ext = os.path.splitext(filename)[1].lower()
+        contents = await file.read()
+        try:
+            if ext == ".pdf":
+                import io
+                from pypdf import PdfReader
+                pdf_file = io.BytesIO(contents)
+                reader = PdfReader(pdf_file)
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_content += text + "\n"
+            elif ext == ".docx":
+                import docx2txt
+                import io
+                docx_file = io.BytesIO(contents)
+                text_content = docx2txt.process(docx_file)
+            else:
+                text_content = contents.decode("utf-8", errors="ignore")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read file: {e}")
+    
+    if sow_text:
+        text_content += "\n" + sow_text
+        
+    text_content = text_content.strip()
+    if not text_content:
+        raise HTTPException(status_code=400, detail="Please provide either a Scope of Work file or description text.")
+        
+    # Retrieve all existing profiles to match against
+    existing_profiles = database.query(db.TalentProfile).all()
+    profiles_list = [{
+        "id": p.id,
+        "role_name": p.role_name,
+        "stack_layer": p.stack_layer,
+        "category": p.category,
+        "engagement_tier": p.engagement_tier,
+        "role_summary": p.role_summary,
+        "red_flags": p.red_flags,
+        "offerings": p.offerings
+    } for p in existing_profiles]
+    
+    import ai
+    analysis = ai.analyze_project_scope_text(text_content, profiles_list)
+    return analysis

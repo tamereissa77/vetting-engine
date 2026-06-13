@@ -27,8 +27,69 @@ const STACK_LAYERS_FILTER = [
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates'>('profiles');
+  const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner'>('profiles');
   const [selectedLayer, setSelectedLayer] = useState<string>('');
+
+  // SOW Planner States
+  const [sowText, setSowText] = useState('');
+  const [sowFile, setSowFile] = useState<File | null>(null);
+  const [plannerResults, setPlannerResults] = useState<{
+    matched_profiles: Array<{ id: number; role_name: string; relevance_reason: string }>;
+    missing_profiles: Array<TalentProfile>;
+  } | null>(null);
+  const [isPlannerLoading, setIsPlannerLoading] = useState(false);
+  const [addedProfileNames, setAddedProfileNames] = useState<string[]>([]);
+  const [plannerDragActive, setPlannerDragActive] = useState(false);
+
+  const handleAnalyzeScope = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sowText.trim() && !sowFile) {
+      alert('Please provide either Scope of Work text or upload an SOW document.');
+      return;
+    }
+    setIsPlannerLoading(true);
+    setPlannerResults(null);
+    setAddedProfileNames([]);
+    try {
+      const results = await api.analyzeProjectScope(sowText || undefined, sowFile || undefined);
+      setPlannerResults(results);
+    } catch (err: any) {
+      alert(err.message || 'Scope analysis failed');
+    } finally {
+      setIsPlannerLoading(false);
+    }
+  };
+
+  const handleAddMissingProfile = async (profile: TalentProfile) => {
+    try {
+      await api.createProfile(profile);
+      setAddedProfileNames((prev) => [...prev, profile.role_name]);
+      fetchProfiles();
+    } catch (err: any) {
+      alert(`Failed to add profile: ${err.message || err}`);
+    }
+  };
+
+  const handleAddAllMissingProfiles = async () => {
+    if (!plannerResults || !plannerResults.missing_profiles) return;
+    const missing = plannerResults.missing_profiles.filter(
+      (p) => !addedProfileNames.includes(p.role_name)
+    );
+    if (missing.length === 0) return;
+    
+    let successCount = 0;
+    for (const profile of missing) {
+      try {
+        await api.createProfile(profile);
+        setAddedProfileNames((prev) => [...prev, profile.role_name]);
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to add bulk profile ${profile.role_name}:`, err);
+      }
+    }
+    fetchProfiles();
+    alert(`Successfully added ${successCount} profiles to the ledger!`);
+  };
   
   // Data States
   const [profiles, setProfiles] = useState<TalentProfile[]>([]);
@@ -446,7 +507,7 @@ export default function App() {
         {/* Left Panel: 5-Layer Sovereign AI Stack Sidebar */}
         <aside className="w-full md:w-80 border-r border-cyber-slate/40 bg-cyber-dark/40 p-4 flex flex-col gap-6 select-none">
           {/* Navigation Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-cyber-gray border border-cyber-slate rounded-lg">
+          <div className="grid grid-cols-4 gap-1.5 p-1 bg-cyber-gray border border-cyber-slate rounded-lg">
             <button
               onClick={() => setActiveTab('profiles')}
               className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
@@ -476,6 +537,16 @@ export default function App() {
               }`}
             >
               Registry
+            </button>
+            <button
+              onClick={() => setActiveTab('planner')}
+              className={`py-2 rounded-md font-mono text-[10px] uppercase tracking-wide transition-all ${
+                activeTab === 'planner' 
+                  ? 'bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-bold shadow-cyan-glow' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Planner
             </button>
           </div>
 
@@ -1482,6 +1553,229 @@ export default function App() {
                     </p>
                   </div>
                 ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: SOW Project Planner */}
+          {activeTab === 'planner' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold font-sans text-slate-100 flex items-center gap-2">
+                  <span>🎯</span>
+                  Project SOW Planner & Gap Identifier
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 font-mono">
+                  Upload project Scope of Work (SOW) documents to audit active ledger gaps and match talent requirements.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                {/* Left Form Panel: Scope Import (5 cols) */}
+                <div className="lg:col-span-5 space-y-6">
+                  <form onSubmit={handleAnalyzeScope} className="cyber-panel rounded-lg p-5 space-y-4">
+                    <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                      <FileText size={14} className="text-cyber-cyan" />
+                      <span>Import SOW Scope</span>
+                    </h3>
+
+                    {/* SOW Text Input */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                        Scope Description / pasted SOW text
+                      </label>
+                      <textarea
+                        value={sowText}
+                        onChange={(e) => setSowText(e.target.value)}
+                        placeholder="Paste Scope of Work or requirements specifications directly..."
+                        className="w-full h-40 bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none p-3 text-xs text-slate-200 rounded font-sans transition-colors resize-none"
+                      />
+                    </div>
+
+                    {/* SOW File upload zone */}
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                        OR UPLOAD SOW DOCUMENT (.PDF, .DOCX, .TXT)
+                      </label>
+                      <div 
+                        className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 ${
+                          plannerDragActive ? 'border-cyber-cyan bg-cyber-cyan/5' : 'border-cyber-slate/50 hover:border-cyber-cyan/30'
+                        } ${sowFile ? 'border-cyber-green bg-cyber-green/5' : ''}`}
+                        onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setPlannerDragActive(true); }}
+                        onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setPlannerDragActive(false); }}
+                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setPlannerDragActive(true); }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPlannerDragActive(false);
+                          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            setSowFile(e.dataTransfer.files[0]);
+                          }
+                        }}
+                        onClick={() => document.getElementById('sow-file-input')?.click()}
+                      >
+                        <input
+                          id="sow-file-input"
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.docx,.txt"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              setSowFile(e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <UploadCloud className={sowFile ? 'text-cyber-green' : 'text-cyber-cyan'} size={24} />
+                        <span className="text-[10px] font-sans text-slate-300 font-semibold mt-1">
+                          {sowFile ? sowFile.name : 'DRAG & DROP SOW DOCUMENT'}
+                        </span>
+                        <span className="text-[8px] font-mono text-slate-500">
+                          {sowFile ? `${(sowFile.size / 1024).toFixed(1)} KB — Click to change` : 'OR CLICK TO BROWSE'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isPlannerLoading || (!sowText.trim() && !sowFile)}
+                      className="w-full py-2 bg-gradient-to-r from-cyber-cyan/20 to-cyber-magenta/20 hover:from-cyber-cyan/30 hover:to-cyber-magenta/30 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-1.5"
+                    >
+                      {isPlannerLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-cyber-cyan border-t-transparent"></div>
+                          <span>Analyzing Scope...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Cpu size={14} />
+                          <span>Analyze Project Scope</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                {/* Right Results Panel (7 cols) */}
+                <div className="lg:col-span-7 space-y-6">
+                  {plannerResults ? (
+                    <div className="space-y-6">
+                      
+                      {/* Matched Profiles Section */}
+                      <div className="cyber-panel rounded-lg p-5 space-y-4">
+                        <h3 className="text-xs font-mono uppercase tracking-wider text-cyber-cyan flex items-center gap-1.5 border-b border-cyber-slate/30 pb-2">
+                          <CheckCircle2 size={14} />
+                          <span>Matched Talent Profiles ({plannerResults.matched_profiles.length})</span>
+                        </h3>
+                        
+                        <div className="space-y-2">
+                          {plannerResults.matched_profiles.map((match) => (
+                            <div key={match.id} className="p-3 bg-cyber-dark/50 border border-cyber-slate/40 rounded flex flex-col md:flex-row justify-between gap-3 items-start md:items-center">
+                              <div className="flex-1">
+                                <h4 className="text-xs font-bold text-slate-200">{match.role_name}</h4>
+                                <p className="text-[10px] text-slate-400 font-sans mt-0.5 leading-relaxed">{match.relevance_reason}</p>
+                              </div>
+                              <span className="px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/20 text-cyber-cyan rounded text-[8px] font-mono uppercase tracking-widest shrink-0 self-start md:self-auto">
+                                Active Profile
+                              </span>
+                            </div>
+                          ))}
+
+                          {plannerResults.matched_profiles.length === 0 && (
+                            <p className="text-xs font-sans text-slate-500 italic py-4">No matching active profiles found for this scope.</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Missing Profiles (Talent Gaps) Section */}
+                      <div className="cyber-panel rounded-lg p-5 space-y-4">
+                        <div className="flex items-center justify-between border-b border-cyber-slate/30 pb-2">
+                          <h3 className="text-xs font-mono uppercase tracking-wider text-cyber-magenta flex items-center gap-1.5">
+                            <AlertCircle size={14} />
+                            <span>Missing Profile Gaps ({plannerResults.missing_profiles.length})</span>
+                          </h3>
+                          
+                          {plannerResults.missing_profiles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={handleAddAllMissingProfiles}
+                              disabled={plannerResults.missing_profiles.every((p) => addedProfileNames.includes(p.role_name))}
+                              className="px-2.5 py-1 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta text-cyber-magenta hover:text-white disabled:opacity-40 disabled:pointer-events-none rounded font-mono text-[9px] uppercase tracking-wider transition-all"
+                            >
+                              Add All to Ledger
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="space-y-4">
+                          {plannerResults.missing_profiles.map((p, idx) => {
+                            const isAdded = addedProfileNames.includes(p.role_name);
+                            return (
+                              <div key={idx} className="p-4 bg-cyber-dark/30 border border-cyber-slate/50 rounded-lg flex flex-col justify-between gap-4">
+                                <div>
+                                  <div className="flex justify-between items-start gap-4">
+                                    <div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="px-1.5 py-0.5 bg-cyber-dark text-slate-400 border border-cyber-slate rounded-full text-[8px] font-mono uppercase">
+                                          {p.stack_layer}
+                                        </span>
+                                        <span className="px-1.5 py-0.5 bg-cyber-magenta/10 border border-cyber-magenta/20 text-cyber-magenta rounded text-[8px] font-mono uppercase">
+                                          {p.engagement_tier}
+                                        </span>
+                                      </div>
+                                      <h4 className="text-sm font-bold text-slate-100 mt-1">{p.role_name}</h4>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddMissingProfile(p)}
+                                      disabled={isAdded}
+                                      className={`px-3 py-1 text-[9px] font-mono uppercase tracking-wider rounded border transition-all ${
+                                        isAdded
+                                          ? 'bg-cyber-green/10 border-cyber-green/30 text-cyber-green cursor-not-allowed'
+                                          : 'bg-cyber-magenta/10 border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20 hover:text-white'
+                                      }`}
+                                    >
+                                      {isAdded ? '✓ Added' : '+ Add to Ledger'}
+                                    </button>
+                                  </div>
+
+                                  <p className="text-xs text-slate-300 font-sans mt-3 leading-relaxed">{p.role_summary}</p>
+                                  
+                                  {p.red_flags && (
+                                    <div className="bg-cyber-magenta/5 border border-cyber-magenta/15 rounded p-2.5 mt-3 text-[10px] font-sans">
+                                      <strong className="text-cyber-magenta font-mono text-[9px] uppercase tracking-wider block mb-1">SCREEN-OUT RED FLAGS:</strong>
+                                      {p.red_flags}
+                                    </div>
+                                  )}
+                                  
+                                  {p.offerings && (
+                                    <div className="bg-cyber-slate/20 border border-cyber-slate/30 rounded p-2.5 mt-2 text-[10px] font-sans">
+                                      <strong className="text-slate-400 font-mono text-[9px] uppercase tracking-wider block mb-1">MAPPED DELIVERABLES:</strong>
+                                      {p.offerings}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {plannerResults.missing_profiles.length === 0 && (
+                            <p className="text-xs font-sans text-slate-500 italic py-4">All project scope requirements are covered by existing profiles. No missing profile gaps detected!</p>
+                          )}
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    <div className="cyber-panel rounded-lg p-12 text-center">
+                      <Cpu className="text-slate-500 mx-auto mb-3 animate-pulse" size={36} />
+                      <p className="text-sm font-mono text-slate-400">
+                        {isPlannerLoading ? 'Scope analysis in progress...' : 'Pasted SOW description text or uploaded scope document will analyze here.'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           )}

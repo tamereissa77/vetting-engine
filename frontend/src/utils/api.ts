@@ -216,5 +216,24 @@ export const api = {
       ws.onerror = onError;
     }
     return ws;
+  },
+
+  async analyzeProjectScope(sowText?: string, file?: File): Promise<{
+    matched_profiles: Array<{ id: number; role_name: string; relevance_reason: string }>;
+    missing_profiles: Array<TalentProfile>;
+  }> {
+    const formData = new FormData();
+    if (sowText) formData.append('sow_text', sowText);
+    if (file) formData.append('file', file);
+
+    const res = await fetch(`${API_URL}/api/projects/analyze-scope`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.detail || 'Failed to analyze project scope');
+    }
+    return res.json();
   }
 };
