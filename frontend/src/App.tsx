@@ -11,6 +11,7 @@ import { AssessmentRing } from './components/AssessmentRing';
 import { ProfileModal } from './components/ProfileModal';
 import { CandidateModal } from './components/CandidateModal';
 import { DossierModal } from './components/DossierModal';
+import { RangePicker } from './components/RangePicker';
 
 const STACK_LAYERS_FILTER = [
   { name: 'All Layers', filter: '' },
@@ -3088,7 +3089,8 @@ export default function App() {
       {/* Assignment Date Modal */}
       {assignModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="cyber-panel border border-cyber-cyan/30 rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4">
+          <div className="cyber-panel border border-cyber-cyan/30 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl space-y-4">
+            {/* Header */}
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold font-mono text-cyber-cyan uppercase tracking-wider flex items-center gap-1.5">
@@ -3106,28 +3108,19 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[9px] font-mono uppercase tracking-wider text-slate-400 mb-1">Start Date</label>
-                <input
-                  type="date"
-                  value={assignModal.startDate}
-                  onChange={e => setAssignModal(prev => prev ? { ...prev, startDate: e.target.value } : null)}
-                  className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-mono uppercase tracking-wider text-slate-400 mb-1">End Date</label>
-                <input
-                  type="date"
-                  value={assignModal.endDate}
-                  onChange={e => setAssignModal(prev => prev ? { ...prev, endDate: e.target.value } : null)}
-                  className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono"
-                />
-              </div>
-              <p className="text-[9px] text-slate-500 font-sans">Dates are optional — you can assign without a schedule and set them later.</p>
-            </div>
+            {/* Calendar range picker */}
+            <RangePicker
+              busyRanges={
+                candidates.find(c => c.id === assignModal.candidateId)?.assignments ?? []
+              }
+              startDate={assignModal.startDate}
+              endDate={assignModal.endDate}
+              onChange={(start, end) =>
+                setAssignModal(prev => prev ? { ...prev, startDate: start, endDate: end } : null)
+              }
+            />
 
+            {/* Actions */}
             <div className="flex justify-end gap-2 pt-2 border-t border-cyber-slate/30">
               <button
                 type="button"
