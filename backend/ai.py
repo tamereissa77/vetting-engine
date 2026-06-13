@@ -39,7 +39,7 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
                 ],
                 "response_format": {"type": "json_object"} if "json" in prompt.lower() else None
             }
-            resp = requests.post(url, headers=headers, json=data, timeout=30)
+            resp = requests.post(url, headers=headers, json=data, timeout=120)
             resp.raise_for_status()
             return resp.json()["choices"][0]["message"]["content"]
 
@@ -64,7 +64,7 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
                 }
             }
 
-            resp = requests.post(url, headers=headers, json=data, timeout=30)
+            resp = requests.post(url, headers=headers, json=data, timeout=120)
             resp.raise_for_status()
             body = resp.json()
 
@@ -100,7 +100,7 @@ def call_llm(prompt: str, system_prompt: str = "") -> str:
                 "stream": False,
                 "format": "json" if "json" in prompt.lower() else None
             }
-            resp = requests.post(url, json=data, timeout=30)
+            resp = requests.post(url, json=data, timeout=120)
             resp.raise_for_status()
             return resp.json()["response"]
 
