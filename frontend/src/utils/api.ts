@@ -1,4 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const getApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl !== 'http://localhost:8000') {
+    return envUrl;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return envUrl || 'http://localhost:8000';
+};
+
+export const API_URL = getApiUrl();
 
 export interface TalentProfile {
   id?: number;
@@ -244,12 +255,31 @@ export const api = {
     return res.json();
   },
 
+  async uploadCVForCandidate(candidateId: number, file: File): Promise<{ candidate_id: number; task_id: string; message: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_URL}/api/candidates/${candidateId}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to upload and parse CV');
+    return res.json();
+  },
+
   async scanLinkedIn(linkedinUrl: string): Promise<{ candidate_id: number; task_id: string; message: string }> {
     const formData = new FormData();
     formData.append('linkedin_url', linkedinUrl);
     const res = await fetch(`${API_URL}/api/candidates/linkedin`, {
       method: 'POST',
       body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to initialize LinkedIn scan');
+    return res.json();
+  },
+
+  async scanLinkedInForCandidate(candidateId: number): Promise<{ candidate_id: number; task_id: string; message: string }> {
+    const res = await fetch(`${API_URL}/api/candidates/${candidateId}/linkedin`, {
+      method: 'POST',
     });
     if (!res.ok) throw new Error('Failed to initialize LinkedIn scan');
     return res.json();

@@ -351,6 +351,15 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
     
     database.commit()
     database.refresh(db_cand)
+    
+    # Automatically trigger re-vetting if there are existing assessments and candidate is not blacklisted
+    existing_assessments = database.query(db.Assessment).filter(db.Assessment.candidate_id == candidate_id).all()
+    profile_ids = [a.profile_id for a in existing_assessments]
+    task_id = None
+    if profile_ids and not db_cand.is_blacklisted:
+        task = tasks_queue.match_candidate_task.delay(candidate_id, profile_ids)
+        task_id = task.id
+        
     return {
         "id": db_cand.id,
         "full_name": db_cand.full_name,
@@ -363,8 +372,80 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
         "is_blacklisted": db_cand.is_blacklisted,
         "assigned_project_id": db_cand.assigned_project_id,
         "assigned_project_name": db_cand.assigned_project.name if db_cand.assigned_project else None,
-        "created_at": db_cand.created_at
+        "created_at": db_cand.created_at,
+        "task_id": task_id
     }
+
+@app.post("/api/candidates/{candidate_id}/upload")
+async def upload_cv_for_candidate(candidate_id: int, file: UploadFile = File(...), database: Session = Depends(db.get_db)):
+    filename = file.filename
+    ext = os.path.splitext(filename)[1].lower()
+    
+    contents = await file.read()
+    cv_text = ""
+
+    try:
+        if ext == ".pdf":
+            import io
+            from pypdf import PdfReader
+            pdf_file = io.BytesIO(contents)
+            reader = PdfReader(pdf_file)
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    cv_text += text + "\n"
+        elif ext == ".docx":
+            import docx2txt
+            import io
+            docx_file = io.BytesIO(contents)
+            cv_text = docx2txt.process(docx_file)
+        else:
+            cv_text = contents.decode("utf-8", errors="ignore")
+    except Exception as e:
+        print(f"Error reading file structure: {e}")
+        raise HTTPException(status_code=400, detail=f"Unsupported or corrupted file structure: {e}")
+
+    if not cv_text.strip():
+        cv_text = f"Candidate Resume File: {filename}\nContains raw text structure."
+
+    db_cand = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
+    if not db_cand:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    if db_cand.is_blacklisted:
+        raise HTTPException(status_code=400, detail="Candidate is blacklisted. System override or whitelist required.")
+
+    # Launch Celery background task
+    task = tasks_queue.parse_cv_task.delay(candidate_id, cv_text)
+    
+    return {
+        "message": "CV uploaded and queue worker parsing initiated for existing candidate.",
+        "candidate_id": candidate_id,
+        "task_id": task.id
+    }
+
+@app.post("/api/candidates/{candidate_id}/linkedin")
+def scan_linkedin_for_candidate(candidate_id: int, database: Session = Depends(db.get_db)):
+    db_cand = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
+    if not db_cand:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+
+    linkedin_url = db_cand.linkedin_url
+    if not linkedin_url or "linkedin.com/" not in linkedin_url.lower():
+        raise HTTPException(status_code=400, detail="Invalid or missing LinkedIn profile URL on candidate record.")
+        
+    if db_cand.is_blacklisted:
+        raise HTTPException(status_code=400, detail="Candidate is blacklisted. System override or whitelist required.")
+
+    # Launch Celery task
+    task = tasks_queue.scan_linkedin_task.delay(candidate_id, linkedin_url)
+
+    return {
+        "message": "LinkedIn scraping mock initialized for existing candidate.",
+        "candidate_id": candidate_id,
+        "task_id": task.id
+    }
+
 
 @app.delete("/api/candidates/{candidate_id}")
 def delete_candidate(candidate_id: int, database: Session = Depends(db.get_db)):
@@ -526,12 +607,20 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
             await asyncio.sleep(0.2)
     except WebSocketDisconnect:
         print(f"WebSocket client closed connection for task: {task_id}")
+    except Exception as e:
+        print(f"Error in websocket_endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
     finally:
         try:
             pubsub.unsubscribe(f"task:{task_id}")
         except Exception:
             pass
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 @app.post("/api/projects/analyze-scope")
 async def analyze_project_scope(

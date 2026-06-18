@@ -41,6 +41,60 @@ def publish_progress(task_id: str, message: str, progress: int, status: str = "p
     # Also save it in redis string key for late subscribers
     r.setex(f"task_state:{task_id}", 3600, json.dumps(payload))
 
+def revet_candidate_if_needed(db, candidate, task_id):
+    """Re-vets a candidate against all profiles they have existing assessments for."""
+    existing_assessments = db.query(Assessment).filter(Assessment.candidate_id == candidate.id).all()
+    profile_ids = [a.profile_id for a in existing_assessments]
+    
+    if not profile_ids:
+        return
+        
+    profiles = db.query(TalentProfile).filter(TalentProfile.id.in_(profile_ids)).all()
+    total = len(profiles)
+    for idx, profile in enumerate(profiles):
+        progress_val = 80 + int((idx / total) * 18)
+        publish_progress(task_id, f"Re-vetting candidate against '{profile.role_name}'...", progress_val, "processing")
+        
+        candidate_details = (
+            f"Candidate Name: {candidate.full_name}\n"
+            f"Candidate Skills: {', '.join(candidate.skills)}\n"
+            f"Candidate Years of Experience: {candidate.experience_years}\n"
+            f"Candidate Notes & Remarks: {candidate.notes or 'None'}\n"
+            f"Candidate Full Resume / Profile Text:\n{candidate.cv_raw_text}"
+        )
+        
+        result = ai.assess_candidate(
+            candidate_text=candidate_details,
+            role_name=profile.role_name,
+            role_summary=profile.role_summary,
+            red_flags=profile.red_flags
+        )
+        
+        existing_assess = db.query(Assessment).filter(
+            Assessment.candidate_id == candidate.id,
+            Assessment.profile_id == profile.id
+        ).first()
+        
+        if existing_assess:
+            existing_assess.match_score = result["match_score"]
+            existing_assess.skills_match = result["skills_match"]
+            existing_assess.skills_gap = result["skills_gap"]
+            existing_assess.red_flags_detected = result["red_flags_detected"]
+            existing_assess.ai_verdict = result["ai_verdict"]
+        else:
+            db_item = Assessment(
+                candidate_id=candidate.id,
+                profile_id=profile.id,
+                match_score=result["match_score"],
+                skills_match=result["skills_match"],
+                skills_gap=result["skills_gap"],
+                red_flags_detected=result["red_flags_detected"],
+                ai_verdict=result["ai_verdict"]
+            )
+            db.add(db_item)
+            
+        db.commit()
+
 @celery_app.task(bind=True)
 def parse_cv_task(self, candidate_id: int, cv_text: str):
     task_id = self.request.id
@@ -70,6 +124,9 @@ def parse_cv_task(self, candidate_id: int, cv_text: str):
             candidate.experience_years = parsed_data["experience_years"]
             candidate.cv_raw_text = cv_text
             db.commit()
+
+            # Automatic re-vetting vs current jobs/profiles
+            revet_candidate_if_needed(db, candidate, task_id)
 
             publish_progress(
                 task_id, 
@@ -184,6 +241,9 @@ def scan_linkedin_task(self, candidate_id: int, linkedin_url: str):
             candidate.linkedin_url = linkedin_url
             db.commit()
 
+            # Automatic re-vetting vs current jobs/profiles
+            revet_candidate_if_needed(db, candidate, task_id)
+
             publish_progress(
                 task_id, 
                 "Successfully synchronized LinkedIn details to candidate record.", 
@@ -235,6 +295,7 @@ def match_candidate_task(self, candidate_id: int, profile_ids: list):
                 f"Candidate Name: {candidate.full_name}\n"
                 f"Candidate Skills: {', '.join(candidate.skills)}\n"
                 f"Candidate Years of Experience: {candidate.experience_years}\n"
+                f"Candidate Notes & Remarks: {candidate.notes or 'None'}\n"
                 f"Candidate Full Resume / Profile Text:\n{candidate.cv_raw_text}"
             )
 

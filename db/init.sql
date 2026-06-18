@@ -12,7 +12,17 @@ CREATE TABLE IF NOT EXISTS talent_profiles (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Candidates Table
+-- 2. SOW Projects Table
+CREATE TABLE IF NOT EXISTS projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    sow_text TEXT,
+    sow_filename VARCHAR(255),
+    analysis_results JSONB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Candidates Table
 CREATE TABLE IF NOT EXISTS candidates (
     id SERIAL PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
@@ -26,7 +36,7 @@ CREATE TABLE IF NOT EXISTS candidates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. AI Assessments Table
+-- 4. AI Assessments Table
 CREATE TABLE IF NOT EXISTS assessments (
     id SERIAL PRIMARY KEY,
     candidate_id INT REFERENCES candidates(id) ON DELETE CASCADE,
@@ -36,15 +46,5 @@ CREATE TABLE IF NOT EXISTS assessments (
     skills_gap TEXT[] DEFAULT '{}',
     red_flags_detected TEXT[] DEFAULT '{}',
     ai_verdict TEXT,                    -- Multi-paragraph detailed analysis and decision rationale
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 4. SOW Projects Table
-CREATE TABLE IF NOT EXISTS projects (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    sow_text TEXT,
-    sow_filename VARCHAR(255),
-    analysis_results JSONB NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

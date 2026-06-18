@@ -12,6 +12,8 @@ interface DossierModalProps {
   taskProgress: number;
   onUpdateCandidate?: (payload: Partial<Candidate>) => Promise<void>;
   onToggleDisqualifyAssessment?: (assessmentId: number, disqualified: boolean) => Promise<void>;
+  onUploadCv?: (candidateId: number, file: File) => Promise<void>;
+  onSyncLinkedin?: (candidateId: number) => Promise<void>;
 }
 
 export const DossierModal: React.FC<DossierModalProps> = ({
@@ -24,6 +26,8 @@ export const DossierModal: React.FC<DossierModalProps> = ({
   taskProgress,
   onUpdateCandidate,
   onToggleDisqualifyAssessment,
+  onUploadCv,
+  onSyncLinkedin,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'scorecard' | 'details'>('scorecard');
   const [expandedAssessments, setExpandedAssessments] = useState<number[]>([]);
@@ -35,6 +39,7 @@ export const DossierModal: React.FC<DossierModalProps> = ({
   const [experienceYears, setExperienceYears] = useState(0);
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [skillsText, setSkillsText] = useState('');
   const [isSaveSuccess, setIsSaveSuccess] = useState(false);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
 
@@ -46,6 +51,7 @@ export const DossierModal: React.FC<DossierModalProps> = ({
       setExperienceYears(candidateDetails.experience_years || 0);
       setLinkedinUrl(candidateDetails.linkedin_url || '');
       setNotes(candidateDetails.notes || '');
+      setSkillsText(candidateDetails.skills ? candidateDetails.skills.join(', ') : '');
       setIsSaveSuccess(false);
       setIsEditingDetails(false);
     }
@@ -57,6 +63,27 @@ export const DossierModal: React.FC<DossierModalProps> = ({
     setExpandedAssessments((prev) =>
       prev.includes(profileId) ? prev.filter((id) => id !== profileId) : [...prev, profileId]
     );
+  };
+
+  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0 && onUploadCv && candidateDetails) {
+      const file = e.target.files[0];
+      try {
+        await onUploadCv(candidateDetails.id, file);
+      } catch (err: any) {
+        alert('Failed to upload CV: ' + (err.message || err));
+      }
+    }
+  };
+
+  const handleLinkedinSync = async () => {
+    if (onSyncLinkedin && candidateDetails) {
+      try {
+        await onSyncLinkedin(candidateDetails.id);
+      } catch (err: any) {
+        alert('Failed to sync LinkedIn: ' + (err.message || err));
+      }
+    }
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -71,7 +98,7 @@ export const DossierModal: React.FC<DossierModalProps> = ({
         experience_years: experienceYears,
         linkedin_url: linkedinUrl,
         notes,
-        skills: candidateDetails.skills,
+        skills: skillsText.split(',').map(s => s.trim()).filter(Boolean),
         is_blacklisted: candidateDetails.is_blacklisted,
       });
       setIsSaveSuccess(true);
@@ -442,18 +469,38 @@ export const DossierModal: React.FC<DossierModalProps> = ({
           ) : !isEditingDetails ? (
             <div className="space-y-6 animate-fade-in">
               {/* Header */}
-              <div className="flex justify-between items-center pb-2 border-b border-cyber-slate/30 shrink-0">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center pb-2 border-b border-cyber-slate/30 gap-3 shrink-0">
                 <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                   <FileText size={14} className="text-cyber-cyan" />
                   <span>Candidate Vetting Record & Source Payload</span>
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingDetails(true)}
-                  className="px-3.5 py-1.5 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
-                >
-                  Edit Details
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingDetails(true)}
+                    className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                  >
+                    Edit Details
+                  </button>
+                  <label className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer">
+                    <span>Upload CV</span>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.txt"
+                      className="hidden"
+                      onChange={handleCvUpload}
+                    />
+                  </label>
+                  {candidateDetails.linkedin_url && (
+                    <button
+                      type="button"
+                      onClick={handleLinkedinSync}
+                      className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                    >
+                      Sync LinkedIn
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Vetting Record Metadata Card */}
@@ -596,6 +643,20 @@ export const DossierModal: React.FC<DossierModalProps> = ({
                       className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-2 text-slate-200 rounded font-sans transition-colors"
                     />
                   </div>
+                </div>
+
+                {/* Skills */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                    Skills (comma-separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={skillsText}
+                    onChange={(e) => setSkillsText(e.target.value)}
+                    placeholder="e.g. Python, Docker, PyTorch"
+                    className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-2 text-slate-200 rounded font-sans transition-colors"
+                  />
                 </div>
 
                 {/* LinkedIn URL */}

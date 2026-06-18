@@ -6,7 +6,7 @@ import {
    UserX, UserCheck, ClipboardList, AlertCircle,
    ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X
  } from 'lucide-react';
-import { api, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
+import { api, API_URL, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
 import { ProfileModal } from './components/ProfileModal';
 import { CandidateModal } from './components/CandidateModal';
@@ -414,7 +414,7 @@ export default function App() {
 
   const fetchSystemConfig = async () => {
     try {
-      const res = await fetch(import.meta.env.VITE_API_URL || 'http://localhost:8000');
+      const res = await fetch(API_URL);
       if (res.ok) {
         const data = await res.json();
         if (data.provider) {
@@ -503,7 +503,7 @@ export default function App() {
   // Candidate Save & Delete CRUD Handlers
   const handleSaveCandidate = async (payload: Partial<Candidate>) => {
     try {
-      let saved: Candidate;
+      let saved: any;
       if (payload.id) {
         saved = await api.updateCandidate(payload.id, payload);
       } else {
@@ -513,6 +513,9 @@ export default function App() {
       fetchCandidates();
       if (saved && saved.id) {
         setExpandedCandidates((prev) => ({ ...prev, [saved.id]: true }));
+      }
+      if (saved && saved.task_id) {
+        startTaskProgressStream(saved.task_id);
       }
       if (selectedCandidateId === payload.id && selectedCandidateId !== null) {
         fetchCandidateDetails(selectedCandidateId);
@@ -613,6 +616,7 @@ export default function App() {
     const ws = api.connectTaskProgress(
       taskId,
       (payload) => {
+        if (wsRef.current !== ws) return;
         setTaskProgress(payload.progress);
         setTaskStatus(payload.status);
         setTaskLogs((prev) => [...prev, `[WORKER] ${payload.message}`]);
@@ -632,11 +636,14 @@ export default function App() {
           }
           // Close after delay
           setTimeout(() => {
-            setActiveTaskId(null);
+            if (wsRef.current === ws) {
+              setActiveTaskId(null);
+            }
           }, 4000);
         }
       },
       () => {
+        if (wsRef.current !== ws) return;
         setTaskLogs((prev) => [...prev, `[SYSTEM ERROR] Failed to connect to progress tracking feed.`]);
         setTaskStatus('failed');
       }
@@ -1747,18 +1754,14 @@ export default function App() {
                             {(() => {
                               const asgns = candidate.assignments || [];
                               const isAssigned = asgns.length > 0;
-                              const label = isAssigned
-                                ? `Assigned: ${[...new Set(asgns.map(a => a.project_name).filter(Boolean))].join(', ')}`
-                                : 'Available';
-                              return (
-                                <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
-                                  isAssigned
-                                    ? 'bg-cyber-magenta/15 text-cyber-magenta border border-cyber-magenta/30'
-                                    : 'bg-cyber-green/15 text-cyber-green border border-cyber-green/30'
-                                }`}>
-                                  {label}
-                                </span>
-                              );
+                              if (!isAssigned) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider bg-cyber-green/15 text-cyber-green border border-cyber-green/30">
+                                    Available
+                                  </span>
+                                );
+                              }
+                              return null;
                             })()}
                             <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
                               candidate.is_blacklisted 
@@ -1860,8 +1863,8 @@ export default function App() {
 
                       {/* Actions */}
                       <div className="flex justify-between items-center gap-2 pt-3 border-t border-cyber-slate/20 mt-2 flex-wrap">
-                        {/* Blacklist toggle */}
-                        <div className="flex items-center gap-2">
+                        {/* Blacklist toggle & release buttons */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <button
                             onClick={() => handleToggleBlacklist(candidate)}
                             className={`flex items-center gap-1 py-1.5 px-2 rounded border text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 ${
@@ -1876,14 +1879,13 @@ export default function App() {
                           </button>
 
                           {(candidate.assignments || []).map(a => (
-                            <button
+                            <span
                               key={a.id}
-                              onClick={() => handleReleaseAssignment(a.id)}
-                              className="flex items-center gap-1 py-1.5 px-2 rounded border border-cyber-magenta/30 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 text-cyber-magenta hover:text-white text-[8px] font-mono tracking-tight transition-colors whitespace-nowrap shrink-0 font-bold"
-                              title={`Release from ${a.project_name || 'project'}`}
+                              className="flex items-center gap-1 py-1 px-2 rounded border border-cyber-magenta/30 bg-cyber-magenta/5 text-cyber-magenta text-[8px] font-mono tracking-tight whitespace-nowrap shrink-0 font-semibold"
+                              title={`Assigned to ${a.project_name || 'project'}`}
                             >
-                              <span>RELEASE: {a.project_name || 'project'}{a.start_date ? ` (${a.start_date})` : ''}</span>
-                            </button>
+                              ASSIGNED: {a.project_name ? (a.project_name.length > 18 ? `${a.project_name.slice(0, 18)}...` : a.project_name) : 'project'}{a.start_date ? ` (${a.start_date})` : ''}
+                            </span>
                           ))}
                         </div>
 
@@ -3074,6 +3076,22 @@ export default function App() {
         taskProgress={taskProgress}
         onUpdateCandidate={handleSaveCandidate}
         onToggleDisqualifyAssessment={handleToggleDisqualifyAssessment}
+        onUploadCv={async (candidateId, file) => {
+          try {
+            const res = await api.uploadCVForCandidate(candidateId, file);
+            startTaskProgressStream(res.task_id);
+          } catch (err: any) {
+            alert('Failed to upload CV: ' + (err.message || err));
+          }
+        }}
+        onSyncLinkedin={async (candidateId) => {
+          try {
+            const res = await api.scanLinkedInForCandidate(candidateId);
+            startTaskProgressStream(res.task_id);
+          } catch (err: any) {
+            alert('Failed to sync LinkedIn: ' + (err.message || err));
+          }
+        }}
         onRunVetting={async (candidateId, profileId) => {
           try {
             setActiveVettingProfileId(profileId);
