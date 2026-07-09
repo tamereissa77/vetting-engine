@@ -43,11 +43,25 @@ export function NexusPortal() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
-    fetchJobs();
+    fetchJobs(false);
+  }, [activeTab, selectedLayer]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      fetchJobs(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(() => {
+      fetchJobs(true);
+    }, 10000); // Poll every 10 seconds in the background
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
-  const fetchJobs = async () => {
-    setIsLoading(true);
+  const fetchJobs = async (isBackground = false) => {
+    if (!isBackground) setIsLoading(true);
     try {
       const res = await fetch(`${getApiUrl()}/api/jobs`);
       if (res.ok) {
@@ -59,7 +73,7 @@ export function NexusPortal() {
     } catch (err) {
       console.error('Error fetching jobs:', err);
     } finally {
-      setIsLoading(false);
+      if (!isBackground) setIsLoading(false);
     }
   };
 
