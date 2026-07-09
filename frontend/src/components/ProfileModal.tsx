@@ -40,6 +40,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
   const [roleSummary, setRoleSummary] = useState('');
   const [redFlags, setRedFlags] = useState('');
   const [offerings, setOfferings] = useState('');
+  const [isOpenOpening, setIsOpenOpening] = useState(true);
   const [error, setError] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -129,6 +130,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
       setRoleSummary(initialProfile.role_summary);
       setRedFlags(initialProfile.red_flags);
       setOfferings(initialProfile.offerings || '');
+      setIsOpenOpening(initialProfile.is_open !== false);
     } else {
       setRoleName('');
       setStackLayer(STACK_LAYERS[0]);
@@ -137,6 +139,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
       setRoleSummary('');
       setRedFlags('');
       setOfferings('');
+      setIsOpenOpening(true);
     }
     setError('');
   }, [initialProfile, isOpen]);
@@ -158,6 +161,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
       role_summary: roleSummary,
       red_flags: redFlags,
       offerings: offerings || undefined,
+      is_open: isOpenOpening
     };
 
     if (initialProfile && initialProfile.id) {
@@ -312,6 +316,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, onS
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Active Job Opening checkbox */}
+            <div className="flex items-center gap-2 pt-5">
+              <input
+                id="is-open-opening"
+                type="checkbox"
+                checked={isOpenOpening}
+                onChange={(e) => setIsOpenOpening(e.target.checked)}
+                className="w-4 h-4 bg-cyber-dark border border-cyber-slate text-cyber-cyan focus:ring-cyber-cyan focus:ring-offset-0 focus:outline-none rounded cursor-pointer"
+              />
+              <label htmlFor="is-open-opening" className="text-xs font-mono uppercase tracking-wider text-slate-300 cursor-pointer select-none">
+                Active Job Opening (Nexus)
+              </label>
             </div>
           </div>
 

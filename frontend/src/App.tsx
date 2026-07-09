@@ -227,6 +227,15 @@ export default function App() {
     }
   };
 
+  const handleOpenProfileModalForMissing = (profile: TalentProfile) => {
+    setModalInitialProfile({
+      ...profile,
+      id: undefined, // Ensure it is treated as a new profile creation
+      is_open: true  // Default to open job opening
+    });
+    setIsModalOpen(true);
+  };
+
   const handleAddAllMissingProfiles = async () => {
     if (!plannerResults || !plannerResults.missing_profiles) return;
     const missing = plannerResults.missing_profiles.filter(
@@ -2355,7 +2364,7 @@ export default function App() {
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => handleAddMissingProfile(p)}
+                                      onClick={() => handleOpenProfileModalForMissing(p)}
                                       className="bg-cyber-magenta/10 border border-cyber-magenta/30 text-cyber-magenta hover:bg-cyber-magenta/20 hover:text-white px-3 py-1 text-[9px] font-mono uppercase tracking-wider rounded border transition-all"
                                     >
                                       + Add to Ledger
