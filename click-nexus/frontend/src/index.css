@@ -157,3 +157,18 @@ body.light input::placeholder,
 body.light textarea::placeholder {
   color: #94a3b8 !important;
 }
+
+/* Arbitrary class overrides for Click Nexus specific backgrounds */
+body.light .bg-\[\#0a0f14\] {
+  background-color: #f8fafc !important;
+}
+body.light .bg-\[\#0b1219\] {
+  background-color: #ffffff !important;
+}
+body.light .bg-\[\#070b0f\] {
+  background-color: #f1f5f9 !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+body.light .bg-\[\#080d12\]\/60 {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+}
