@@ -62,19 +62,6 @@ export function NexusPortal() {
     }
   };
 
-  const handleToggleJob = async (profileId: number) => {
-    try {
-      const res = await fetch(`${getApiUrl()}/api/jobs/${profileId}/toggle`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        fetchJobs();
-      }
-    } catch (err) {
-      console.error('Error toggling job status:', err);
-    }
-  };
-
   const filteredJobs = jobs.filter(job => {
     const matchesLayer = selectedLayer
       ? job.stack_layer.toLowerCase().includes(selectedLayer.split('—')[0].trim().toLowerCase())
@@ -225,7 +212,7 @@ export function NexusPortal() {
                           ? 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan shadow-cyan-glow' 
                           : 'bg-cyber-slate/30 border-cyber-slate/50 text-slate-500'
                       }`}>
-                        {job.is_open ? 'OPENING ACTIVE' : 'OFF-DUTY'}
+                        {job.is_open ? 'OPENING ACTIVE' : 'CLOSED'}
                       </span>
                     </div>
 
@@ -259,18 +246,6 @@ export function NexusPortal() {
                       DECISION CODE: #T-{job.id}
                     </span>
                     <div className="flex items-center gap-2">
-                      {activeTab === 'all' && (
-                        <button
-                          onClick={() => handleToggleJob(job.id)}
-                          className={`px-3 py-1.5 rounded font-mono text-[9px] uppercase tracking-wide border transition-all ${
-                            job.is_open
-                              ? 'bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border-cyber-magenta/40 text-cyber-magenta hover:text-white'
-                              : 'bg-cyber-green/10 hover:bg-cyber-green/25 border-cyber-green/40 text-cyber-green hover:text-white'
-                          }`}
-                        >
-                          {job.is_open ? 'Close Opening' : 'Activate Opening'}
-                        </button>
-                      )}
                       {job.is_open ? (
                         <button
                           onClick={() => {

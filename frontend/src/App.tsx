@@ -4,7 +4,8 @@ import {
    Trash2, Edit, UploadCloud, Linkedin, CheckCircle2,
    AlertTriangle, User, Mail, FileText, Sparkles, Network,
    UserX, UserCheck, ClipboardList, AlertCircle,
-   ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X, Sun, Moon
+   ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X, Sun, Moon,
+   Briefcase, BriefcaseOff
  } from 'lucide-react';
 import { api, API_URL, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
@@ -524,6 +525,15 @@ export default function App() {
     }
   };
 
+  const handleToggleProfileOpening = async (id: number) => {
+    try {
+      await api.toggleProfileOpening(id);
+      fetchProfiles();
+    } catch (err: any) {
+      alert(err.message || 'Failed to toggle opening status');
+    }
+  };
+
   // Candidate Save & Delete CRUD Handlers
   const handleSaveCandidate = async (payload: Partial<Candidate>) => {
     try {
@@ -1018,6 +1028,13 @@ export default function App() {
                               <span className="px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/20 text-cyber-cyan rounded text-[9px] font-mono uppercase tracking-wider font-bold">
                                 {candidates.filter((c) => c.assessments && c.assessments.some((a) => a.role_name === profile.role_name)).length} Candidates
                               </span>
+                              <span className={`px-2 py-0.5 border rounded text-[9px] font-mono uppercase tracking-wider font-bold ${
+                                profile.is_open !== false
+                                  ? 'bg-cyber-green/10 border-cyber-green/30 text-cyber-green shadow-cyan-glow/10'
+                                  : 'bg-cyber-slate/30 border-cyber-slate/50 text-slate-500'
+                              }`}>
+                                {profile.is_open !== false ? 'OPENING ACTIVE' : 'OPENING CLOSED'}
+                              </span>
                             </div>
                             <h4 className="text-base font-bold font-sans text-slate-100 group-hover:text-cyber-cyan transition-colors mt-1.5">
                               {profile.role_name}
@@ -1073,6 +1090,17 @@ export default function App() {
 
                       {/* Actions */}
                       <div className="flex justify-end gap-3 pt-3 border-t border-cyber-slate/20 mt-2">
+                        <button
+                          onClick={() => handleToggleProfileOpening(profile.id!)}
+                          className={`p-1.5 border border-transparent rounded transition-colors ${
+                            profile.is_open !== false
+                              ? 'text-cyber-cyan hover:text-cyber-cyan/85 hover:border-cyber-cyan/20'
+                              : 'text-slate-500 hover:text-cyber-magenta hover:border-cyber-magenta/20'
+                          }`}
+                          title={profile.is_open !== false ? "Close active openings" : "Activate active openings"}
+                        >
+                          {profile.is_open !== false ? <Briefcase size={14} /> : <BriefcaseOff size={14} />}
+                        </button>
                         <button
                           onClick={() => {
                             setModalInitialProfile(profile);

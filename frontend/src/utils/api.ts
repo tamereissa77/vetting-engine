@@ -20,6 +20,7 @@ export interface TalentProfile {
   role_summary: string;
   red_flags: string;
   offerings?: string;
+  is_open?: boolean;
 }
 
 export interface CandidateAssignmentRecord {
@@ -169,6 +170,14 @@ export const api = {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('Failed to delete profile');
+  },
+
+  async toggleProfileOpening(profileId: number): Promise<{ id: number; is_open: boolean }> {
+    const res = await fetch(`${API_URL}/api/profiles/${profileId}/toggle`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to toggle profile opening status');
+    return res.json();
   },
 
   async importProfileFile(file: File): Promise<TalentProfile> {

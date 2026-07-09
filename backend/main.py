@@ -26,6 +26,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
+    from sqlalchemy import text
+    try:
+        session = db.SessionLocal()
+        session.execute(text("ALTER TABLE talent_profiles ADD COLUMN IF NOT EXISTS is_open BOOLEAN DEFAULT TRUE;"))
+        session.commit()
+        session.close()
+    except Exception as e:
+        print(f"Migration error: {e}")
+
     import seed
     seed.seed_database()
 
@@ -41,6 +50,7 @@ class ProfileSchema(BaseModel):
     role_summary: str
     red_flags: str
     offerings: Optional[str] = ""
+    is_open: Optional[bool] = True
 
     class Config:
         from_attributes = True
@@ -150,8 +160,20 @@ def get_profiles_with_ids(database: Session = Depends(db.get_db)):
         "engagement_tier": p.engagement_tier,
         "role_summary": p.role_summary,
         "red_flags": p.red_flags,
-        "offerings": p.offerings
+        "offerings": p.offerings,
+        "is_open": getattr(p, "is_open", True)
     } for p in profiles]
+
+@app.post("/api/profiles/{profile_id}/toggle")
+def toggle_profile_opening(profile_id: int, database: Session = Depends(db.get_db)):
+    """Toggle whether a talent profile has active job openings."""
+    profile = database.query(db.TalentProfile).filter(db.TalentProfile.id == profile_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    profile.is_open = not getattr(profile, "is_open", True)
+    database.commit()
+    database.refresh(profile)
+    return {"id": profile.id, "is_open": profile.is_open}
 
 @app.post("/api/profiles", response_model=ProfileSchema)
 def create_profile(profile: ProfileSchema, database: Session = Depends(db.get_db)):

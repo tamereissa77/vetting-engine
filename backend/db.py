@@ -33,6 +33,7 @@ class TalentProfile(Base):
     role_summary = Column(Text, nullable=False)
     red_flags = Column(Text, nullable=False)
     offerings = Column(Text, nullable=True)
+    is_open = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
