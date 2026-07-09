@@ -151,6 +151,46 @@ def parse_cv_task(self, candidate_id: int, cv_text: str):
     finally:
         db.close()
 
+from html.parser import HTMLParser
+import requests
+
+class MLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.reset()
+        self.strict = False
+        self.convert_charrefs = True
+        self.text = []
+        self.in_script = False
+        self.in_style = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "script":
+            self.in_script = True
+        elif tag.lower() == "style":
+            self.in_style = True
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "script":
+            self.in_script = False
+        elif tag.lower() == "style":
+            self.in_style = False
+
+    def handle_data(self, d):
+        if not self.in_script and not self.in_style:
+            self.text.append(d)
+
+    def get_data(self):
+        return "".join(self.text)
+
+def clean_html(html_content: str) -> str:
+    stripper = MLStripper()
+    stripper.feed(html_content)
+    cleaned = stripper.get_data()
+    lines = (line.strip() for line in cleaned.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    return "\n".join(chunk for chunk in chunks if chunk)
+
 @celery_app.task(bind=True)
 def scan_linkedin_task(self, candidate_id: int, linkedin_url: str):
     task_id = self.request.id
@@ -167,69 +207,40 @@ def scan_linkedin_task(self, candidate_id: int, linkedin_url: str):
         publish_progress(task_id, "Extracting public profile DOM tree payload...", 60, "processing")
         time.sleep(1)
 
-        publish_progress(task_id, "Parsing experience structures & harvesting skills index...", 80, "processing")
-        time.sleep(0.5)
+        # Try to scrape the LinkedIn profile URL directly
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        }
+        
+        scraped_profile_text = None
+        
+        try:
+            publish_progress(task_id, "Fetching profile from LinkedIn...", 65, "processing")
+            response = requests.get(linkedin_url, headers=headers, timeout=15)
+            if response.status_code == 200:
+                html_lower = response.text.lower()
+                # Basic check to see if the page contains typical LinkedIn public profile data
+                if "linkedin.com/in/" in html_lower or "experience" in html_lower or "education" in html_lower:
+                    scraped_profile_text = clean_html(response.text)
+                    print(f"Successfully scraped {len(scraped_profile_text)} characters of text from LinkedIn URL.")
+                else:
+                    print("Scraped page did not contain expected LinkedIn profile content (possible redirect/authwall).")
+            else:
+                print(f"Failed to scrape LinkedIn URL directly. HTTP status code: {response.status_code}")
+        except Exception as scrap_err:
+            print(f"Error during direct LinkedIn scraping: {scrap_err}")
 
-        # Generate custom mock experience matching LinkedIn patterns
-        # Parse potential name from url (robust parsing using urlparse to clean query strings and parameters)
-        from urllib.parse import urlparse
-        parsed_url = urlparse(linkedin_url)
-        clean_path = parsed_url.path.strip().rstrip('/')
-        url_part = clean_path.split("/")[-1] if clean_path else ""
-        
-        # Replace dashes or pluses
-        url_part = url_part.replace("-", " ").replace("+", " ")
-        
-        # Strip alphanumeric code suffix (e.g. tamer-abdel-fattah-5b20748 -> Tamer Abdel Fattah)
-        import re
-        words = url_part.split()
-        if words:
-            last_word = words[-1]
-            if any(c.isdigit() for c in last_word) and len(last_word) >= 5:
-                words = words[:-1]
-        
-        name_part = " ".join(words).title().strip()
-        if not name_part or len(name_part) < 3:
-            name_part = "Alex Rivera"
-
-        # Dynamically generate skills and experiences to match a random target talent profile
-        import random
-        all_profiles = db.query(TalentProfile).all()
-        if all_profiles:
-            target_profile = random.choice(all_profiles)
-            role_name = target_profile.role_name
-            layer = target_profile.stack_layer
-            summary = target_profile.role_summary
-            
-            # Simple skills recommendation matching the role
-            tech_words = ["Python", "Docker", "Git", "Linux", "Kubernetes", "PostgreSQL", "React", "Rust", "Golang"]
-            skills_suggested = [w.strip().replace(',', '') for w in summary.split() if w.strip().replace(',', '').istitle() and len(w) > 3]
-            skills_list = list(set(skills_suggested + tech_words))[:8]
-            
-            mock_profile = (
-                f"Full Name: {name_part}\n"
-                f"Email: {name_part.lower().replace(' ', '.')}@example.com\n"
-                f"LinkedIn: {linkedin_url}\n"
-                f"Professional Profile: {role_name} ({layer})\n"
-                f"Summary: Certified specialist. {summary}\n"
-                f"Experience:\n"
-                f"- Lead {role_name} at SovereignCorp (3 years): Managed core system layers. {summary}\n"
-                f"- Senior DevOps Engineer at GuardGov Systems (2 years): Maintained and optimized high-integrity deployments.\n"
-                f"Skills: {', '.join(skills_list)}"
-            )
+        # Check if we got valid scraped profile text
+        if scraped_profile_text and len(scraped_profile_text.strip()) > 300:
+            publish_progress(task_id, "Parsing experience structures & harvesting skills index...", 80, "processing")
+            time.sleep(0.5)
+            publish_progress(task_id, "Parsing scraped profile via AI client...", 85, "processing")
+            parsed_data = ai.parse_linkedin_profile(scraped_profile_text)
+            profile_to_save = scraped_profile_text
         else:
-            mock_profile = (
-                f"Full Name: {name_part}\n"
-                f"Email: {name_part.lower().replace(' ', '.')}@example.com\n"
-                f"LinkedIn: {linkedin_url}\n"
-                f"Experience:\n"
-                f"- Lead MLOps Engineer at SovereignCloud (3 years): Built and scaled deployment of 20+ fine-tuned Arabic language models. Zero-trust infra.\n"
-                f"- Senior DevOps at DataGuard (2 years): Built streaming pipelines with Kafka handling 500k events/sec.\n"
-                f"Skills: MLOps, Docker, Kubernetes, PyTorch, Python, Kafka, Git, Linux, Arabic NLP"
-            )
-        
-        publish_progress(task_id, "Parsing scraped profile via AI client...", 85, "processing")
-        parsed_data = ai.parse_cv(mock_profile)
+            raise Exception("LinkedIn anti-bot protection blocked direct scraping (HTTP 999). Please copy-paste the profile details manually using the 'Paste Profile' button in the candidate dossier.")
 
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if candidate:
@@ -237,7 +248,7 @@ def scan_linkedin_task(self, candidate_id: int, linkedin_url: str):
             candidate.email = parsed_data["email"]
             candidate.skills = parsed_data["skills"]
             candidate.experience_years = parsed_data["experience_years"]
-            candidate.cv_raw_text = mock_profile
+            candidate.cv_raw_text = profile_to_save
             candidate.linkedin_url = linkedin_url
             db.commit()
 
@@ -264,6 +275,60 @@ def scan_linkedin_task(self, candidate_id: int, linkedin_url: str):
         db.rollback()
         print(f"LinkedIn scan failed: {e}")
         publish_progress(task_id, f"Scanning Pipeline Error: {str(e)}", 100, "failed")
+    finally:
+        db.close()
+
+@celery_app.task(bind=True)
+def parse_linkedin_text_task(self, candidate_id: int, profile_text: str):
+    task_id = self.request.id
+    print(f"Starting parse_linkedin_text_task for Candidate {candidate_id}, Task ID: {task_id}")
+    db = SessionLocal()
+    try:
+        publish_progress(task_id, "Initializing pasted LinkedIn profile parser...", 20, "processing")
+        import time
+        time.sleep(0.5)
+
+        publish_progress(task_id, "Cleaning HTML tags & formatting raw profile text...", 50, "processing")
+        cleaned_text = clean_html(profile_text)
+        
+        publish_progress(task_id, "Invoking Sovereign AI Parser Layer...", 75, "processing")
+        parsed_data = ai.parse_linkedin_profile(cleaned_text)
+        
+        publish_progress(task_id, "Writing candidate parameters to PostgreSQL db...", 90, "processing")
+        time.sleep(0.5)
+
+        candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
+        if candidate:
+            candidate.full_name = parsed_data["full_name"]
+            candidate.email = parsed_data["email"]
+            candidate.skills = parsed_data["skills"]
+            candidate.experience_years = parsed_data["experience_years"]
+            candidate.cv_raw_text = cleaned_text
+            db.commit()
+
+            # Automatic re-vetting vs current jobs/profiles
+            revet_candidate_if_needed(db, candidate, task_id)
+
+            publish_progress(
+                task_id, 
+                "Successfully parsed and saved candidate LinkedIn details.", 
+                100, 
+                "completed",
+                data={
+                    "candidate_id": candidate.id,
+                    "full_name": candidate.full_name,
+                    "email": candidate.email,
+                    "skills": candidate.skills,
+                    "experience_years": candidate.experience_years
+                }
+            )
+        else:
+            raise Exception("Candidate profile record not found in database.")
+
+    except Exception as e:
+        db.rollback()
+        print(f"LinkedIn pasted profile parsing failed: {e}")
+        publish_progress(task_id, f"Parsing Pipeline Error: {str(e)}", 100, "failed")
     finally:
         db.close()
 

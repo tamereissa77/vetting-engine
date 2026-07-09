@@ -413,3 +413,41 @@ def analyze_project_scope_text(sow_text: str, existing_profiles: list) -> dict:
                 }
             ]
         }
+
+def parse_linkedin_profile(profile_text: str) -> dict:
+    """Parses scraped LinkedIn public profile text using the LLM."""
+    system_prompt = (
+        "You are an expert LinkedIn profile parser AI. "
+        "Your task is to extract structured profile information from a public LinkedIn profile web page. "
+        "Analyze the profile's text and return ONLY a valid JSON object matching this structure:\n"
+        "{\n"
+        "  \"full_name\": \"Candidate Full Name\",\n"
+        "  \"email\": \"Candidate Email\",\n"
+        "  \"skills\": [\"Skill1\", \"Skill2\", ...],\n"
+        "  \"experience_years\": 15\n"
+        "}"
+    )
+
+    prompt = (
+        "Extract the metadata from the following LinkedIn profile page text. "
+        "If you cannot find a specific field (like email), generate a realistic one using the candidate's name (e.g. first.last@example.com). "
+        "For experience_years, calculate the total years of work experience across all listed roles (do not count overlapping roles twice). "
+        "Ensure all keys are formatted exactly as instructed and the output is valid JSON.\n\n"
+        f"LinkedIn Profile Text:\n{profile_text}"
+    )
+
+    try:
+        raw_res = call_llm(prompt, system_prompt)
+        cleaned_res = clean_json_string(raw_res)
+        parsed = json.loads(cleaned_res)
+        return {
+            "full_name": parsed.get("full_name") or "Unknown Candidate",
+            "email": parsed.get("email") or "candidate@sovereign-talent.net",
+            "skills": parsed.get("skills") or [],
+            "experience_years": parsed.get("experience_years") or 0
+        }
+    except Exception as e:
+        print(f"Fallback parse triggered for LinkedIn: {e}")
+        # Fallback to CV parser heuristic or a simple parsing logic
+        return parse_cv(profile_text)
+

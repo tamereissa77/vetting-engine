@@ -285,6 +285,29 @@ export const api = {
     return res.json();
   },
 
+  async pasteLinkedIn(text: string, linkedinUrl?: string): Promise<{ candidate_id: number; task_id: string; message: string }> {
+    const formData = new FormData();
+    formData.append('text', text);
+    if (linkedinUrl) formData.append('linkedin_url', linkedinUrl);
+    const res = await fetch(`${API_URL}/api/candidates/linkedin/paste`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to process pasted LinkedIn profile text');
+    return res.json();
+  },
+
+  async pasteLinkedInForCandidate(candidateId: number, text: string): Promise<{ candidate_id: number; task_id: string; message: string }> {
+    const formData = new FormData();
+    formData.append('text', text);
+    const res = await fetch(`${API_URL}/api/candidates/${candidateId}/linkedin/paste`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to process pasted LinkedIn profile text');
+    return res.json();
+  },
+
   async matchCandidate(candidateId: number, profileIds: number[]): Promise<{ task_id: string; message: string }> {
     const res = await fetch(`${API_URL}/api/candidates/${candidateId}/match`, {
       method: 'POST',

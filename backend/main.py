@@ -446,6 +446,21 @@ def scan_linkedin_for_candidate(candidate_id: int, database: Session = Depends(d
         "task_id": task.id
     }
 
+@app.post("/api/candidates/{candidate_id}/linkedin/paste")
+def paste_linkedin_for_candidate(candidate_id: int, text: str = Form(...), database: Session = Depends(db.get_db)):
+    db_cand = database.query(db.Candidate).filter(db.Candidate.id == candidate_id).first()
+    if not db_cand:
+        raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+    if db_cand.is_blacklisted:
+        raise HTTPException(status_code=400, detail="Candidate is blacklisted. System override or whitelist required.")
+        
+    task = tasks_queue.parse_linkedin_text_task.delay(candidate_id, text)
+    return {
+        "message": "LinkedIn pasted profile parsing task enqueued.",
+        "candidate_id": candidate_id,
+        "task_id": task.id
+    }
 
 @app.delete("/api/candidates/{candidate_id}")
 def delete_candidate(candidate_id: int, database: Session = Depends(db.get_db)):
@@ -529,6 +544,27 @@ def scan_linkedin(linkedin_url: str = Form(...), database: Session = Depends(db.
 
     return {
         "message": "LinkedIn scraping mock initialized.",
+        "candidate_id": new_candidate.id,
+        "task_id": task.id
+    }
+
+@app.post("/api/candidates/linkedin/paste")
+def paste_linkedin(linkedin_url: Optional[str] = Form(None), text: str = Form(...), database: Session = Depends(db.get_db)):
+    # Create candidate placeholder
+    new_candidate = db.Candidate(
+        full_name="Parsing Pasted LinkedIn...",
+        linkedin_url=linkedin_url,
+        cv_raw_text="Parsing in progress..."
+    )
+    database.add(new_candidate)
+    database.commit()
+    database.refresh(new_candidate)
+
+    # Launch Celery task
+    task = tasks_queue.parse_linkedin_text_task.delay(new_candidate.id, text)
+
+    return {
+        "message": "LinkedIn pasted profile parsing task enqueued.",
         "candidate_id": new_candidate.id,
         "task_id": task.id
     }

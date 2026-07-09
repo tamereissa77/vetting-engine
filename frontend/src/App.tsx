@@ -3011,7 +3011,7 @@ export default function App() {
 
           {/* Floating task log terminal */}
           {activeTaskId && (
-            <div className="fixed bottom-6 right-6 z-50 w-full max-w-lg cyber-panel border-cyber-cyan/50 shadow-cyan-glow-intense rounded-lg overflow-hidden flex flex-col">
+            <div className="fixed bottom-6 right-6 z-[100] w-full max-w-lg cyber-panel border-cyber-cyan/50 shadow-cyan-glow-intense rounded-lg overflow-hidden flex flex-col">
               <div className="bg-cyber-gray px-4 py-2 border-b border-cyber-slate/60 flex items-center justify-between text-xs font-mono">
                 <span className="text-cyber-cyan flex items-center gap-1.5">
                   <Terminal size={14} className="animate-pulse" />
@@ -3074,6 +3074,7 @@ export default function App() {
         profiles={profiles}
         activeVettingProfileId={activeVettingProfileId}
         taskProgress={taskProgress}
+        taskStatus={taskStatus}
         onUpdateCandidate={handleSaveCandidate}
         onToggleDisqualifyAssessment={handleToggleDisqualifyAssessment}
         onUploadCv={async (candidateId, file) => {
@@ -3090,6 +3091,14 @@ export default function App() {
             startTaskProgressStream(res.task_id);
           } catch (err: any) {
             alert('Failed to sync LinkedIn: ' + (err.message || err));
+          }
+        }}
+        onPasteLinkedin={async (candidateId, text) => {
+          try {
+            const res = await api.pasteLinkedInForCandidate(candidateId, text);
+            startTaskProgressStream(res.task_id);
+          } catch (err: any) {
+            alert('Failed to process pasted LinkedIn profile: ' + (err.message || err));
           }
         }}
         onRunVetting={async (candidateId, profileId) => {

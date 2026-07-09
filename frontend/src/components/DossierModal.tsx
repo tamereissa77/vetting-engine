@@ -10,10 +10,12 @@ interface DossierModalProps {
   onRunVetting: (candidateId: number, profileId: number) => void;
   activeVettingProfileId: number | null;
   taskProgress: number;
+  taskStatus?: 'idle' | 'processing' | 'completed' | 'failed';
   onUpdateCandidate?: (payload: Partial<Candidate>) => Promise<void>;
   onToggleDisqualifyAssessment?: (assessmentId: number, disqualified: boolean) => Promise<void>;
   onUploadCv?: (candidateId: number, file: File) => Promise<void>;
   onSyncLinkedin?: (candidateId: number) => Promise<void>;
+  onPasteLinkedin?: (candidateId: number, text: string) => Promise<void>;
 }
 
 export const DossierModal: React.FC<DossierModalProps> = ({
@@ -24,10 +26,12 @@ export const DossierModal: React.FC<DossierModalProps> = ({
   onRunVetting,
   activeVettingProfileId,
   taskProgress,
+  taskStatus,
   onUpdateCandidate,
   onToggleDisqualifyAssessment,
   onUploadCv,
   onSyncLinkedin,
+  onPasteLinkedin,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'scorecard' | 'details'>('scorecard');
   const [expandedAssessments, setExpandedAssessments] = useState<number[]>([]);
@@ -42,6 +46,8 @@ export const DossierModal: React.FC<DossierModalProps> = ({
   const [skillsText, setSkillsText] = useState('');
   const [isSaveSuccess, setIsSaveSuccess] = useState(false);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [isPastingLinkedin, setIsPastingLinkedin] = useState(false);
+  const [pastedLinkedinText, setPastedLinkedinText] = useState('');
 
   useEffect(() => {
     if (candidateDetails && isOpen) {
@@ -54,6 +60,8 @@ export const DossierModal: React.FC<DossierModalProps> = ({
       setSkillsText(candidateDetails.skills ? candidateDetails.skills.join(', ') : '');
       setIsSaveSuccess(false);
       setIsEditingDetails(false);
+      setIsPastingLinkedin(false);
+      setPastedLinkedinText('');
     }
   }, [candidateDetails, isOpen]);
 
@@ -98,7 +106,6 @@ export const DossierModal: React.FC<DossierModalProps> = ({
         experience_years: experienceYears,
         linkedin_url: linkedinUrl,
         notes,
-        skills: skillsText.split(',').map(s => s.trim()).filter(Boolean),
         is_blacklisted: candidateDetails.is_blacklisted,
       });
       setIsSaveSuccess(true);
@@ -106,6 +113,19 @@ export const DossierModal: React.FC<DossierModalProps> = ({
       setTimeout(() => setIsSaveSuccess(false), 4000);
     } catch (err: any) {
       alert('Failed to update candidate details: ' + (err.message || err));
+    }
+  };
+
+  const handlePasteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onPasteLinkedin && candidateDetails && pastedLinkedinText.trim()) {
+      try {
+        await onPasteLinkedin(candidateDetails.id, pastedLinkedinText);
+        setIsPastingLinkedin(false);
+        setPastedLinkedinText('');
+      } catch (err: any) {
+        alert('Failed to process pasted LinkedIn profile text: ' + (err.message || err));
+      }
     }
   };
 
@@ -466,6 +486,53 @@ export const DossierModal: React.FC<DossierModalProps> = ({
                 })}
               </div>
             </div>
+          ) : isPastingLinkedin ? (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex justify-between items-center pb-2 border-b border-cyber-slate/30 shrink-0">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                  <Linkedin size={14} className="text-cyber-cyan" />
+                  <span>Paste LinkedIn Profile Text / HTML Source</span>
+                </h3>
+              </div>
+
+              <form onSubmit={handlePasteSubmit} className="space-y-4 text-xs bg-cyber-gray/25 border border-cyber-slate/40 rounded-lg p-5">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                    LinkedIn Profile Content
+                  </label>
+                  <p className="text-[10px] text-slate-400 mb-2 leading-relaxed font-sans font-light">
+                    Copy the text content (Ctrl+A) from the candidate's LinkedIn profile webpage, or view the page source and paste it here. The Sovereign AI parser will clean and extract their real work history and skills.
+                  </p>
+                  <textarea
+                    value={pastedLinkedinText}
+                    onChange={(e) => setPastedLinkedinText(e.target.value)}
+                    rows={12}
+                    placeholder="Paste copied profile text or HTML code here..."
+                    className="w-full bg-cyber-dark border border-cyber-slate focus:border-cyber-cyan focus:outline-none px-3 py-2 text-slate-200 rounded font-mono transition-colors resize-y leading-relaxed"
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPastingLinkedin(false);
+                      setPastedLinkedinText('');
+                    }}
+                    className="px-4 py-2 border border-cyber-slate hover:bg-cyber-slate/30 hover:border-slate-400 text-slate-300 rounded font-mono text-[10px] uppercase tracking-widest transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-cyber-cyan/15 hover:bg-cyber-cyan/35 border border-cyber-cyan/40 hover:border-cyber-cyan text-cyber-cyan hover:text-white rounded font-mono text-[10px] uppercase tracking-widest shadow-cyan-glow/20 transition-all flex items-center gap-1.5"
+                  >
+                    <span>Process Paste</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           ) : !isEditingDetails ? (
             <div className="space-y-6 animate-fade-in">
               {/* Header */}
@@ -474,31 +541,48 @@ export const DossierModal: React.FC<DossierModalProps> = ({
                   <FileText size={14} className="text-cyber-cyan" />
                   <span>Candidate Vetting Record & Source Payload</span>
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingDetails(true)}
-                    className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
-                  >
-                    Edit Details
-                  </button>
-                  <label className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer">
-                    <span>Upload CV</span>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      className="hidden"
-                      onChange={handleCvUpload}
-                    />
-                  </label>
-                  {candidateDetails.linkedin_url && (
-                    <button
-                      type="button"
-                      onClick={handleLinkedinSync}
-                      className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
-                    >
-                      Sync LinkedIn
-                    </button>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {taskStatus === 'processing' ? (
+                    <div className="flex items-center gap-2 text-cyber-cyan font-mono text-[10px] bg-cyber-cyan/5 border border-cyber-cyan/20 rounded px-3 py-1 animate-pulse">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyber-cyan animate-ping" />
+                      <span>PROCESSING TASK ({taskProgress}%)...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingDetails(true)}
+                        className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                      >
+                        Edit Details
+                      </button>
+                      <label className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1 cursor-pointer">
+                        <span>Upload CV</span>
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.txt"
+                          className="hidden"
+                          onChange={handleCvUpload}
+                        />
+                      </label>
+                      {candidateDetails.linkedin_url && (
+                        <button
+                          type="button"
+                          onClick={handleLinkedinSync}
+                          className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                        >
+                          Sync LinkedIn
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsPastingLinkedin(true)}
+                        className="px-3 py-1 bg-cyber-cyan/10 hover:bg-cyber-cyan/35 border border-cyber-cyan/30 text-cyber-cyan hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-colors flex items-center gap-1"
+                      >
+                        <Linkedin size={10} />
+                        Paste Profile
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
