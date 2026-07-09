@@ -65,3 +65,95 @@
 .btn-cyan-glow {
   animation: pulse-neon 2.5s infinite;
 }
+
+/* Light mode overrides */
+body.light {
+  background-color: #f8fafc !important;
+  background-image: 
+    linear-gradient(rgba(2, 132, 199, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(2, 132, 199, 0.04) 1px, transparent 1px) !important;
+  color: #0f172a !important;
+}
+
+/* Core Layout Backgrounds */
+body.light .bg-cyber-dark { background-color: #ffffff !important; }
+body.light .bg-cyber-gray { background-color: #f1f5f9 !important; }
+body.light .bg-cyber-slate { background-color: #e2e8f0 !important; }
+body.light .bg-cyber-dark\/40 { background-color: rgba(255, 255, 255, 0.4) !important; }
+body.light .bg-cyber-dark\/80 { background-color: rgba(255, 255, 255, 0.8) !important; }
+
+/* Theme Accents Backgrounds */
+body.light .bg-cyber-cyan\/10 { background-color: rgba(2, 132, 199, 0.08) !important; }
+body.light .bg-cyber-magenta\/10 { background-color: rgba(192, 38, 211, 0.08) !important; }
+body.light .bg-cyber-green\/10 { background-color: rgba(5, 150, 105, 0.08) !important; }
+body.light .bg-cyber-cyan\/15 { background-color: rgba(2, 132, 199, 0.12) !important; }
+body.light .bg-cyber-magenta\/15 { background-color: rgba(192, 38, 211, 0.12) !important; }
+
+/* Hover Overrides */
+body.light .hover\:bg-cyber-cyan\/35:hover { background-color: rgba(2, 132, 199, 0.25) !important; }
+body.light .hover\:bg-cyber-magenta\/35:hover { background-color: rgba(192, 38, 211, 0.25) !important; }
+
+/* Slate Text Overrides */
+body.light .text-slate-100 { color: #0f172a !important; }
+body.light .text-slate-200 { color: #1e293b !important; }
+body.light .text-slate-300 { color: #334155 !important; }
+body.light .text-slate-400 { color: #475569 !important; }
+body.light .text-slate-500 { color: #64748b !important; }
+
+/* Accent Text Overrides */
+body.light .text-cyber-cyan { color: #0284c7 !important; }
+body.light .text-cyber-magenta { color: #c026d3 !important; }
+body.light .text-cyber-green { color: #059669 !important; }
+
+/* Border Overrides */
+body.light .border-cyber-slate { border-color: #cbd5e1 !important; }
+body.light .border-cyber-slate\/30 { border-color: rgba(203, 213, 225, 0.4) !important; }
+body.light .border-cyber-slate\/50 { border-color: rgba(203, 213, 225, 0.6) !important; }
+body.light .border-cyber-slate\/60 { border-color: rgba(203, 213, 225, 0.7) !important; }
+body.light .border-cyber-cyan\/30 { border-color: rgba(2, 132, 199, 0.3) !important; }
+body.light .border-cyber-cyan\/40 { border-color: rgba(2, 132, 199, 0.4) !important; }
+body.light .border-cyber-magenta\/30 { border-color: rgba(192, 38, 211, 0.3) !important; }
+body.light .border-cyber-magenta\/40 { border-color: rgba(192, 38, 211, 0.4) !important; }
+
+/* Cyber Panels (Glassmorphism -> Paper-glass) */
+body.light .cyber-panel {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(203, 213, 225, 0.8) !important;
+  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.08) !important;
+  color: #0f172a !important;
+}
+body.light .cyber-panel-glow-cyan {
+  border-color: rgba(2, 132, 199, 0.3) !important;
+  box-shadow: 0 0 15px rgba(2, 132, 199, 0.1) !important;
+}
+body.light .cyber-panel-glow-magenta {
+  border-color: rgba(192, 38, 211, 0.3) !important;
+  box-shadow: 0 0 15px rgba(192, 38, 211, 0.1) !important;
+}
+
+/* Glow Effects */
+body.light .shadow-cyan-glow { box-shadow: 0 0 15px rgba(2, 132, 199, 0.15) !important; }
+body.light .shadow-magenta-glow { box-shadow: 0 0 15px rgba(192, 38, 211, 0.15) !important; }
+
+/* Scrollbars */
+body.light::-webkit-scrollbar-track { background: #f1f5f9 !important; }
+body.light::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
+body.light::-webkit-scrollbar-thumb:hover { background: #0284c7 !important; }
+
+/* Form Elements */
+body.light input,
+body.light select,
+body.light textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+body.light input:focus,
+body.light select:focus,
+body.light textarea:focus {
+  border-color: #0284c7 !important;
+}
+body.light input::placeholder,
+body.light textarea::placeholder {
+  color: #94a3b8 !important;
+}

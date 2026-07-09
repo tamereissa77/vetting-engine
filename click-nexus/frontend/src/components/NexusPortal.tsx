@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Cpu, Database, Layers, Terminal, Sparkles, Network, Activity, Info, Briefcase } from 'lucide-react';
+import { Shield, Cpu, Database, Layers, Terminal, Sparkles, Network, Activity, Info, Briefcase, Sun, Moon } from 'lucide-react';
 import { JobApplicationModal } from './JobApplicationModal';
 
 export interface Job {
@@ -41,6 +41,23 @@ export function NexusPortal() {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light');
+    } else {
+      document.body.classList.remove('light');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   useEffect(() => {
     fetchJobs(false);
@@ -116,6 +133,16 @@ export function NexusPortal() {
         </div>
 
         <div className="flex items-center gap-4 text-xs font-mono">
+          {/* Theme Toggler */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-3 py-1 bg-cyber-gray border border-cyber-slate text-slate-300 rounded-full font-mono text-[10px] hover:bg-cyber-slate/30 transition-all cursor-pointer"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? <Sun size={12} className="text-cyber-cyan" /> : <Moon size={12} className="text-cyber-magenta" />}
+            <span>{theme === 'light' ? 'Light' : 'Dark'}</span>
+          </button>
+
           <div className="flex items-center gap-2 px-3 py-1 bg-cyber-gray border border-cyber-slate rounded-full">
             <span className="w-1.5 h-1.5 rounded-full bg-cyber-green animate-ping"></span>
             <span className="text-slate-300">VITTING INTEGRATION: ACTIVE</span>
