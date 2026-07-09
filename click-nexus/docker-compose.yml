@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  nexus-db:
+    image: postgres:15-alpine
+    container_name: nexus-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nexus_ats
+    ports:
+      - "5433:5432"
+    volumes:
+      - nexus_data:/var/lib/postgresql/data
+
+  nexus-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexus-backend
+    restart: always
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@nexus-db:5432/nexus_ats
+      - VITTING_ENGINE_API_URL=http://sovereign-backend:8000
+    depends_on:
+      - nexus-db
+
+  nexus-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexus-frontend
+    restart: always
+    ports:
+      - "5174:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - nexus-backend
+
+volumes:
+  nexus_data:
+
+# Share the network environment with Click Group Vitting Engine
+networks:
+  default:
+    name: click-vitting_default
+    external: true
