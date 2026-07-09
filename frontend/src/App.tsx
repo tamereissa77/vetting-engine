@@ -252,6 +252,7 @@ export default function App() {
   const [ledgerFilterQuery, setLedgerFilterQuery] = useState<string>('');
   const [registryFilterRole, setRegistryFilterRole] = useState<string>('');
   const [registryFilterMinScore, setRegistryFilterMinScore] = useState<number>(0);
+  const [registrySearchQuery, setRegistrySearchQuery] = useState<string>('');
 
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -264,6 +265,12 @@ export default function App() {
   
   // Computed state for filtered candidates in the Registry tab
   const filteredCandidates = candidates.filter((candidate) => {
+    if (registrySearchQuery.trim()) {
+      const q = registrySearchQuery.trim().toLowerCase();
+      if (!candidate.full_name.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
     if (registryFilterRole) {
       const activeAssessment = candidate.assessments?.find((a) => a.role_name === registryFilterRole);
       if (!activeAssessment) {
@@ -1663,6 +1670,30 @@ export default function App() {
               <div className="cyber-panel rounded-lg p-4 border border-cyber-slate/30 bg-cyber-dark/40 backdrop-blur-md">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex flex-wrap items-center gap-6">
+                    {/* Name Filter */}
+                    <div className="flex flex-col gap-1.5 min-w-[240px]">
+                      <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">
+                        Search by Candidate Name
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={registrySearchQuery}
+                          onChange={(e) => setRegistrySearchQuery(e.target.value)}
+                          placeholder="Type name to filter..."
+                          className="w-full bg-cyber-dark/80 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60 transition-colors placeholder:text-slate-500"
+                        />
+                        {registrySearchQuery && (
+                          <button
+                            onClick={() => setRegistrySearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 font-sans text-sm focus:outline-none"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Role Filter */}
                     <div className="flex flex-col gap-1.5 min-w-[240px]">
                       <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">
@@ -1708,11 +1739,12 @@ export default function App() {
                     <span className="text-[10px] font-mono text-slate-400">
                       MATCHES: <span className="text-cyber-green font-bold">{filteredCandidates.length}</span> / {candidates.length}
                     </span>
-                    {(registryFilterRole || registryFilterMinScore > 0) && (
+                    {(registryFilterRole || registryFilterMinScore > 0 || registrySearchQuery) && (
                       <button
                         onClick={() => {
                           setRegistryFilterRole('');
                           setRegistryFilterMinScore(0);
+                          setRegistrySearchQuery('');
                         }}
                         className="px-3 py-1 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta/50 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all"
                       >
