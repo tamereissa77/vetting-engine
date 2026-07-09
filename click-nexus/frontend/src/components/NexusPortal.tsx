@@ -11,6 +11,7 @@ export interface Job {
   role_summary: string;
   red_flags: string;
   offerings?: string;
+  is_open?: boolean;
 }
 
 const STACK_LAYERS = [
@@ -27,12 +28,18 @@ const STACK_LAYERS = [
   { name: 'Domain (Vertical)', filter: 'Domain (Vertical)', icon: Briefcase }
 ];
 
+const getApiUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:8001`;
+};
+
 export function NexusPortal() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
 
   useEffect(() => {
     fetchJobs();
@@ -41,8 +48,7 @@ export function NexusPortal() {
   const fetchJobs = async () => {
     setIsLoading(true);
     try {
-      // Connect to Nexus Backend API (configured on port 8001)
-      const res = await fetch('http://localhost:8001/api/jobs');
+      const res = await fetch(`${getApiUrl()}/api/jobs`);
       if (res.ok) {
         const data = await res.json();
         setJobs(data);
@@ -56,9 +62,26 @@ export function NexusPortal() {
     }
   };
 
-  const filteredJobs = selectedLayer
-    ? jobs.filter(job => job.stack_layer.toLowerCase().includes(selectedLayer.split('—')[0].trim().toLowerCase()))
-    : jobs;
+  const handleToggleJob = async (profileId: number) => {
+    try {
+      const res = await fetch(`${getApiUrl()}/api/jobs/${profileId}/toggle`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        fetchJobs();
+      }
+    } catch (err) {
+      console.error('Error toggling job status:', err);
+    }
+  };
+
+  const filteredJobs = jobs.filter(job => {
+    const matchesLayer = selectedLayer
+      ? job.stack_layer.toLowerCase().includes(selectedLayer.split('—')[0].trim().toLowerCase())
+      : true;
+    const matchesTab = activeTab === 'active' ? job.is_open : true;
+    return matchesLayer && matchesTab;
+  });
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-[#0a0f14]">
@@ -145,6 +168,30 @@ export function NexusPortal() {
             </p>
           </div>
 
+          {/* Sub-Navigation Tabs */}
+          <div className="flex gap-4 border-b border-cyber-slate/40 pb-2">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
+                activeTab === 'active'
+                  ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              💼 Active Job Openings ({jobs.filter(j => j.is_open).length})
+            </button>
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
+                activeTab === 'all'
+                  ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              🗃️ All Roles Directory ({jobs.length})
+            </button>
+          </div>
+
           {/* Loading */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -173,8 +220,12 @@ export function NexusPortal() {
                           {job.stack_layer}
                         </span>
                       </div>
-                      <span className="shrink-0 px-2 py-0.5 bg-cyber-cyan/10 border border-cyber-cyan/30 text-cyber-cyan font-mono text-[8px] uppercase tracking-wider rounded">
-                        {job.engagement_tier}
+                      <span className={`shrink-0 px-2 py-0.5 font-mono text-[8px] uppercase tracking-wider rounded border ${
+                        job.is_open 
+                          ? 'bg-cyber-cyan/10 border-cyber-cyan/30 text-cyber-cyan shadow-cyan-glow' 
+                          : 'bg-cyber-slate/30 border-cyber-slate/50 text-slate-500'
+                      }`}>
+                        {job.is_open ? 'OPENING ACTIVE' : 'OFF-DUTY'}
                       </span>
                     </div>
 
@@ -203,19 +254,39 @@ export function NexusPortal() {
                     )}
                   </div>
 
-                  <div className="pt-6 border-t border-cyber-slate/20 mt-6 flex justify-between items-center">
+                  <div className="pt-6 border-t border-cyber-slate/20 mt-6 flex justify-between items-center gap-4 flex-wrap">
                     <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">
                       DECISION CODE: #T-{job.id}
                     </span>
-                    <button
-                      onClick={() => {
-                        setSelectedJob(job);
-                        setIsModalOpen(true);
-                      }}
-                      className="px-4 py-2 bg-cyber-cyan/15 hover:bg-cyber-cyan/35 border border-cyber-cyan/40 hover:border-cyber-cyan text-cyber-cyan hover:text-white rounded font-mono text-[10px] uppercase tracking-widest shadow-cyan-glow/10 hover:shadow-cyan-glow-intense/20 transition-all duration-200"
-                    >
-                      Apply For Role
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {activeTab === 'all' && (
+                        <button
+                          onClick={() => handleToggleJob(job.id)}
+                          className={`px-3 py-1.5 rounded font-mono text-[9px] uppercase tracking-wide border transition-all ${
+                            job.is_open
+                              ? 'bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border-cyber-magenta/40 text-cyber-magenta hover:text-white'
+                              : 'bg-cyber-green/10 hover:bg-cyber-green/25 border-cyber-green/40 text-cyber-green hover:text-white'
+                          }`}
+                        >
+                          {job.is_open ? 'Close Opening' : 'Activate Opening'}
+                        </button>
+                      )}
+                      {job.is_open ? (
+                        <button
+                          onClick={() => {
+                            setSelectedJob(job);
+                            setIsModalOpen(true);
+                          }}
+                          className="px-4 py-2 bg-cyber-cyan/15 hover:bg-cyber-cyan/35 border border-cyber-cyan/40 hover:border-cyber-cyan text-cyber-cyan hover:text-white rounded font-mono text-[10px] uppercase tracking-widest shadow-cyan-glow/10 hover:shadow-cyan-glow-intense/20 transition-all duration-200"
+                        >
+                          Apply For Role
+                        </button>
+                      ) : (
+                        <span className="px-4 py-2 bg-cyber-slate/30 border border-cyber-slate/50 text-slate-500 rounded font-mono text-[10px] uppercase tracking-widest cursor-not-allowed">
+                          Closed
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

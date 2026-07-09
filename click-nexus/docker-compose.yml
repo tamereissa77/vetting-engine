@@ -25,6 +25,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@nexus-db:5432/nexus_ats
       - VITTING_ENGINE_API_URL=http://sovereign-backend:8000
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - nexus-db
 

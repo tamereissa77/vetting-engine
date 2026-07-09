@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, BackgroundTasks
@@ -15,6 +16,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@nexus-d
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+# Job Opening Status Model
+class JobOpening(Base):
+    __tablename__ = 'job_openings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, unique=True, nullable=False, index=True)
+    is_open = Column(Boolean, default=True)
 
 # Application Table Model
 class Application(Base):
@@ -140,12 +149,13 @@ def read_root():
     return {"status": "Click Nexus: Talent Gateway Backend is operational"}
 
 @app.get("/api/jobs")
-def get_jobs():
+def get_jobs(database: Session = Depends(get_db)):
     """Fetch available job postings directly from Vitting Engine's target profiles."""
     profiles = VittingEngineClient.get_job_profiles()
+    
+    # Fallback Mock Job Profiles in case connection is down or during setup
     if not profiles:
-        # Fallback Mock Job Profiles in case connection is down or during setup
-        return [
+        profiles = [
             {
                 "id": 1,
                 "role_name": "Sovereign AI Infrastructure Architect",
@@ -167,7 +177,46 @@ def get_jobs():
                 "offerings": "pgvector, Qdrant, Milvus, text-embeddings-inference"
             }
         ]
+        
+    # Sync and merge with local openings db
+    openings = database.query(JobOpening).all()
+    openings_dict = {o.profile_id: o.is_open for o in openings}
+
+    # If openings is empty, populate all profiles as open by default
+    if not openings:
+        for p in profiles:
+            p_id = p["id"]
+            db_opening = JobOpening(profile_id=p_id, is_open=True)
+            database.add(db_opening)
+            openings_dict[p_id] = True
+        database.commit()
+
+    # Merge is_open status into returned profiles
+    for p in profiles:
+        p_id = p["id"]
+        if p_id not in openings_dict:
+            db_opening = JobOpening(profile_id=p_id, is_open=True)
+            database.add(db_opening)
+            database.commit()
+            openings_dict[p_id] = True
+            
+        p["is_open"] = openings_dict[p_id]
+
     return profiles
+
+@app.post("/api/jobs/{profile_id}/toggle")
+def toggle_job_opening(profile_id: int, database: Session = Depends(get_db)):
+    """Toggle the open/closed active status of a job posting."""
+    db_opening = database.query(JobOpening).filter(JobOpening.profile_id == profile_id).first()
+    if not db_opening:
+        db_opening = JobOpening(profile_id=profile_id, is_open=False)
+        database.add(db_opening)
+    else:
+        db_opening.is_open = not db_opening.is_open
+    
+    database.commit()
+    database.refresh(db_opening)
+    return {"profile_id": profile_id, "is_open": db_opening.is_open}
 
 @app.post("/api/applications", response_model=ApplicationResponse)
 async def create_application(

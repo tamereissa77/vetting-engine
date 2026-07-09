@@ -20,6 +20,11 @@ interface ApplicationResult {
   logs: string[];
 }
 
+const getApiUrl = () => {
+  const hostname = window.location.hostname;
+  return `http://${hostname}:8001`;
+};
+
 export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
   const [step, setStep] = useState<number>(1);
   const [fullName, setFullName] = useState<string>('');
@@ -100,7 +105,7 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
     clearPolling();
     pollTimerRef.current = window.setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:8001/api/applications/${appId}`);
+        const res = await fetch(`${getApiUrl()}/api/applications/${appId}`);
         if (res.ok) {
           const data: ApplicationResult = await res.json();
           setAppDetails(data);
@@ -147,7 +152,7 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
     }
 
     try {
-      const response = await fetch('http://localhost:8001/api/applications', {
+      const response = await fetch(`${getApiUrl()}/api/applications`, {
         method: 'POST',
         body: formData,
       });
@@ -159,10 +164,10 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
         startPollingApplication(resData.id);
       } else {
         const errMsg = await response.text();
-        setTerminalLogs(prev => [...prev, `[ERROR] Ingestion Dispatch failed: Status ${response.status} - ${errMsg}`]);
+        setTerminalLogs((prev: string[]) => [...prev, `[ERROR] Ingestion Dispatch failed: Status ${response.status} - ${errMsg}`]);
       }
     } catch (err: any) {
-      setTerminalLogs(prev => [...prev, `[ERROR] Network error during dispatch: ${err.message}`]);
+      setTerminalLogs((prev: string[]) => [...prev, `[ERROR] Network error during dispatch: ${err.message}`]);
     }
   };
 
