@@ -40,6 +40,7 @@ export function NexusPortal() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'active' | 'all'>('active');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     fetchJobs();
@@ -67,7 +68,18 @@ export function NexusPortal() {
       ? job.stack_layer.toLowerCase().includes(selectedLayer.split('—')[0].trim().toLowerCase())
       : true;
     const matchesTab = activeTab === 'active' ? job.is_open : true;
-    return matchesLayer && matchesTab;
+    
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = query
+      ? (
+          job.role_name.toLowerCase().includes(query) ||
+          job.role_summary.toLowerCase().includes(query) ||
+          job.stack_layer.toLowerCase().includes(query) ||
+          (job.offerings && job.offerings.toLowerCase().includes(query))
+        )
+      : true;
+
+    return matchesLayer && matchesTab && matchesSearch;
   });
 
   return (
@@ -155,28 +167,50 @@ export function NexusPortal() {
             </p>
           </div>
 
-          {/* Sub-Navigation Tabs */}
-          <div className="flex gap-4 border-b border-cyber-slate/40 pb-2">
-            <button
-              onClick={() => setActiveTab('active')}
-              className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
-                activeTab === 'active'
-                  ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              💼 Active Job Openings ({jobs.filter(j => j.is_open).length})
-            </button>
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
-                activeTab === 'all'
-                  ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              🗃️ All Roles Directory ({jobs.length})
-            </button>
+          {/* Sub-Navigation Tabs & Search */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cyber-slate/40 pb-2">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab('active')}
+                className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
+                  activeTab === 'active'
+                    ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                💼 Active Job Openings ({jobs.filter(j => j.is_open).length})
+              </button>
+              <button
+                onClick={() => setActiveTab('all')}
+                className={`px-4 py-2 font-mono text-[11px] uppercase tracking-wider transition-all border-b-2 ${
+                  activeTab === 'all'
+                    ? 'border-cyber-cyan text-cyber-cyan font-bold shadow-cyan-glow'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🗃️ All Roles Directory ({jobs.length})
+              </button>
+            </div>
+
+            {/* Keyword Search Input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by role, keyword..."
+                className="bg-[#0b1219] border border-cyber-slate/60 focus:border-cyber-cyan focus:outline-none px-3 py-1.5 text-xs text-slate-200 rounded font-mono w-64 transition-all hover:border-cyber-slate/85"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="px-2.5 py-1.5 bg-cyber-slate/30 border border-cyber-slate/50 text-slate-400 rounded text-[10px] font-mono hover:bg-cyber-slate/50 hover:text-slate-200 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Loading */}
