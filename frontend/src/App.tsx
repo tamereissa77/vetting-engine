@@ -4,7 +4,7 @@ import {
    Trash2, Edit, UploadCloud, Linkedin, CheckCircle2,
    AlertTriangle, User, Mail, FileText, Sparkles, Network,
    UserX, UserCheck, ClipboardList, AlertCircle,
-   ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X
+   ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X, Sun, Moon
  } from 'lucide-react';
 import { api, API_URL, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
@@ -30,6 +30,23 @@ const STACK_LAYERS_FILTER = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<'profiles' | 'vetting' | 'candidates' | 'planner' | 'projects' | 'utilization'>('profiles');
   const [selectedLayer, setSelectedLayer] = useState<string>('');
+  
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light');
+    } else {
+      document.body.classList.remove('light');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   // SOW Planner States
   const [sowText, setSowText] = useState('');
@@ -815,6 +832,18 @@ export default function App() {
         
         {/* Status Indicators */}
         <div className="flex items-center gap-6 text-xs font-mono">
+          {/* Theme Toggler */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-3 py-1 bg-cyber-gray border border-cyber-slate hover:border-slate-400 rounded-full text-slate-300 hover:text-slate-100 transition-colors focus:outline-none"
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+          >
+            {theme === 'light' ? <Sun size={12} className="text-cyber-cyan" /> : <Moon size={12} className="text-cyber-magenta" />}
+            <span className="text-[10px] tracking-wider uppercase font-bold">
+              {theme === 'light' ? 'Light' : 'Dark'}
+            </span>
+          </button>
+
           <div className="flex items-center gap-2 px-3 py-1 bg-cyber-gray border border-cyber-slate rounded-full">
             <span className="w-2 h-2 rounded-full bg-cyber-green animate-ping"></span>
             <span className="text-slate-300">AI Stack:</span>
