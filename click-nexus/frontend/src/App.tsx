@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { NexusPortal } from './components/NexusPortal';
-import { LogOut } from 'lucide-react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -37,7 +35,6 @@ export default function App() {
     }
 
     setIsAuthenticated(true);
-    setUserRole(role);
   }, []);
 
   const handleLogout = () => {
@@ -57,15 +54,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0a0f14] text-slate-100 font-sans antialiased relative">
-      <button
-        onClick={handleLogout}
-        className="absolute top-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 bg-[#0f172a]/80 border border-slate-800 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-lg text-sm transition-all shadow-lg cursor-pointer"
-        title="Log out of Nexus Portal"
-      >
-        <LogOut size={14} />
-        <span className="font-mono text-xs uppercase font-bold">Logout</span>
-      </button>
-      <NexusPortal />
+      <NexusPortal onLogout={handleLogout} />
     </div>
   );
 }

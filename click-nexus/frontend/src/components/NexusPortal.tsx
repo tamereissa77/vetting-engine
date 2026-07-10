@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Cpu, Database, Layers, Terminal, Sparkles, Network, Activity, Info, Briefcase, Sun, Moon } from 'lucide-react';
+import { Shield, Cpu, Database, Layers, Terminal, Sparkles, Network, Activity, Info, Briefcase, Sun, Moon, LogOut } from 'lucide-react';
 import { JobApplicationModal } from './JobApplicationModal';
 
 export interface Job {
@@ -33,7 +33,7 @@ const getApiUrl = () => {
   return `http://${hostname}:8001`;
 };
 
-export function NexusPortal() {
+export function NexusPortal({ onLogout }: { onLogout?: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedLayer, setSelectedLayer] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -147,6 +147,17 @@ export function NexusPortal() {
             <span className="w-1.5 h-1.5 rounded-full bg-cyber-green animate-ping"></span>
             <span className="text-slate-300">VITTING INTEGRATION: ACTIVE</span>
           </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 px-3 py-1 bg-cyber-gray border border-cyber-slate text-slate-300 rounded-full font-mono text-[10px] hover:bg-cyber-slate/30 hover:text-red-400 hover:border-red-500/30 transition-all cursor-pointer"
+              title="Log out of Nexus Portal"
+            >
+              <LogOut size={12} />
+              <span>LOGOUT</span>
+            </button>
+          )}
         </div>
       </header>
 
