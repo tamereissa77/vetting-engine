@@ -212,7 +212,7 @@ export default function App() {
               <Shield className="text-white" size={24} />
             </div>
             <h1 className="text-2xl font-bold tracking-wider bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              SOVEREIGN AUTH
+              CLICK GROUP TALENT ENGINE
             </h1>
             <p className="text-slate-400 text-xs mt-1">Access Control Portal</p>
           </div>
