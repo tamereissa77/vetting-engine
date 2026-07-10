@@ -2,10 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme palette — the `cyber` colors in tailwind.config.js resolve to these
+ * RGB triplets, so every utility variant (bg-cyber-cyan/10, hover:border-…,
+ * gradients, shadows) automatically adapts when body.light swaps the values.
+ */
+:root {
+  --cyber-dark: 10 15 20;      /* #0a0f14 */
+  --cyber-gray: 15 23 42;      /* #0f172a */
+  --cyber-slate: 30 41 59;     /* #1e293b */
+  --cyber-cyan: 34 211 238;    /* #22d3ee */
+  --cyber-magenta: 217 70 239; /* #d946ef */
+  --cyber-green: 16 185 129;   /* #10b981 */
+  --cyber-yellow: 245 158 11;  /* #f59e0b */
+}
+
+body.light {
+  --cyber-dark: 255 255 255;   /* panels: white */
+  --cyber-gray: 241 245 249;   /* surfaces: slate-100 */
+  --cyber-slate: 203 213 225;  /* borders/tracks: slate-300 */
+  --cyber-cyan: 14 116 144;    /* cyan-700 — readable accent on white */
+  --cyber-magenta: 162 28 175; /* fuchsia-700 */
+  --cyber-green: 4 120 87;     /* emerald-700 */
+  --cyber-yellow: 180 83 9;    /* amber-700 */
+}
+
 @layer base {
   body {
     background-color: #0a0f14;
-    background-image: 
+    background-image:
       linear-gradient(rgba(34, 211, 238, 0.015) 1px, transparent 1px),
       linear-gradient(90deg, rgba(34, 211, 238, 0.015) 1px, transparent 1px);
     background-size: 40px 40px;
@@ -43,22 +68,22 @@
 }
 
 .cyber-panel-glow-cyan {
-  border: 1px solid rgba(34, 211, 238, 0.3);
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+  border: 1px solid rgb(var(--cyber-cyan) / 0.3);
+  box-shadow: 0 0 20px rgb(var(--cyber-cyan) / 0.15);
 }
 
 .cyber-panel-glow-magenta {
-  border: 1px solid rgba(217, 70, 239, 0.3);
-  box-shadow: 0 0 20px rgba(217, 70, 239, 0.15);
+  border: 1px solid rgb(var(--cyber-magenta) / 0.3);
+  box-shadow: 0 0 20px rgb(var(--cyber-magenta) / 0.15);
 }
 
 /* Pulse animation for CTA buttons */
 @keyframes pulse-neon {
   0%, 100% {
-    box-shadow: 0 0 5px rgba(34, 211, 238, 0.4), inset 0 0 5px rgba(34, 211, 238, 0.2);
+    box-shadow: 0 0 5px rgb(var(--cyber-cyan) / 0.4), inset 0 0 5px rgb(var(--cyber-cyan) / 0.2);
   }
   50% {
-    box-shadow: 0 0 15px rgba(34, 211, 238, 0.7), inset 0 0 10px rgba(34, 211, 238, 0.4);
+    box-shadow: 0 0 15px rgb(var(--cyber-cyan) / 0.7), inset 0 0 10px rgb(var(--cyber-cyan) / 0.4);
   }
 }
 
@@ -66,81 +91,53 @@
   animation: pulse-neon 2.5s infinite;
 }
 
-/* Light mode overrides */
+/* ============================================================
+ * Light mode. The accent/surface palette is handled by the CSS
+ * variables above; the overrides below cover classes that don't
+ * go through the `cyber` palette (slate text scale, hover:text-white,
+ * hard-coded hex backgrounds, red/yellow states, forms, scrollbars).
+ * ============================================================ */
 body.light {
   background-color: #f8fafc !important;
-  background-image: 
-    linear-gradient(rgba(2, 132, 199, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(2, 132, 199, 0.04) 1px, transparent 1px) !important;
+  background-image:
+    linear-gradient(rgba(14, 116, 144, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.04) 1px, transparent 1px) !important;
   color: #0f172a !important;
 }
 
-/* Core Layout Backgrounds */
-body.light .bg-cyber-dark { background-color: #ffffff !important; }
-body.light .bg-cyber-gray { background-color: #f1f5f9 !important; }
-body.light .bg-cyber-slate { background-color: #e2e8f0 !important; }
-body.light .bg-cyber-dark\/40 { background-color: rgba(255, 255, 255, 0.4) !important; }
-body.light .bg-cyber-dark\/80 { background-color: rgba(255, 255, 255, 0.8) !important; }
-
-/* Theme Accents Backgrounds */
-body.light .bg-cyber-cyan\/10 { background-color: rgba(2, 132, 199, 0.08) !important; }
-body.light .bg-cyber-magenta\/10 { background-color: rgba(192, 38, 211, 0.08) !important; }
-body.light .bg-cyber-green\/10 { background-color: rgba(5, 150, 105, 0.08) !important; }
-body.light .bg-cyber-cyan\/15 { background-color: rgba(2, 132, 199, 0.12) !important; }
-body.light .bg-cyber-magenta\/15 { background-color: rgba(192, 38, 211, 0.12) !important; }
-
-/* Hover Overrides */
-body.light .hover\:bg-cyber-cyan\/35:hover { background-color: rgba(2, 132, 199, 0.25) !important; }
-body.light .hover\:bg-cyber-magenta\/35:hover { background-color: rgba(192, 38, 211, 0.25) !important; }
-
-/* Slate Text Overrides */
+/* Slate text scale: flip light-on-dark to dark-on-light */
 body.light .text-slate-100 { color: #0f172a !important; }
 body.light .text-slate-200 { color: #1e293b !important; }
 body.light .text-slate-300 { color: #334155 !important; }
 body.light .text-slate-400 { color: #475569 !important; }
 body.light .text-slate-500 { color: #64748b !important; }
+body.light .hover\:text-slate-200:hover { color: #0f172a !important; }
 
-/* Accent Text Overrides */
-body.light .text-cyber-cyan { color: #0284c7 !important; }
-body.light .text-cyber-magenta { color: #c026d3 !important; }
-body.light .text-cyber-green { color: #059669 !important; }
+/* hover:text-white sits on tinted buttons; go dark on a light page */
+body.light .hover\:text-white:hover { color: #020617 !important; }
+body.light .hover\:text-red-400:hover { color: #b91c1c !important; }
 
-/* Border Overrides */
-body.light .border-cyber-slate { border-color: #cbd5e1 !important; }
-body.light .border-cyber-slate\/30 { border-color: rgba(203, 213, 225, 0.4) !important; }
-body.light .border-cyber-slate\/50 { border-color: rgba(203, 213, 225, 0.6) !important; }
-body.light .border-cyber-slate\/60 { border-color: rgba(203, 213, 225, 0.7) !important; }
-body.light .border-cyber-cyan\/30 { border-color: rgba(2, 132, 199, 0.3) !important; }
-body.light .border-cyber-cyan\/40 { border-color: rgba(2, 132, 199, 0.4) !important; }
-body.light .border-cyber-magenta\/30 { border-color: rgba(192, 38, 211, 0.3) !important; }
-body.light .border-cyber-magenta\/40 { border-color: rgba(192, 38, 211, 0.4) !important; }
+/* Status colors that need darker shades for contrast on white */
+body.light .text-emerald-400 { color: #047857 !important; }
+body.light .text-yellow-500 { color: #b45309 !important; }
+body.light .border-yellow-500\/20 { border-color: rgba(180, 83, 9, 0.3) !important; }
+body.light .border-yellow-500\/30 { border-color: rgba(180, 83, 9, 0.4) !important; }
+body.light .bg-yellow-500\/5 { background-color: rgba(180, 83, 9, 0.06) !important; }
 
-/* Cyber Panels (Glassmorphism -> Paper-glass) */
+/* Cyber panels: glassmorphism -> paper-glass */
 body.light .cyber-panel {
-  background: rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
   border-color: rgba(203, 213, 225, 0.8) !important;
-  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.12) !important;
   color: #0f172a !important;
 }
-body.light .cyber-panel-glow-cyan {
-  border-color: rgba(2, 132, 199, 0.3) !important;
-  box-shadow: 0 0 15px rgba(2, 132, 199, 0.1) !important;
-}
-body.light .cyber-panel-glow-magenta {
-  border-color: rgba(192, 38, 211, 0.3) !important;
-  box-shadow: 0 0 15px rgba(192, 38, 211, 0.1) !important;
-}
-
-/* Glow Effects */
-body.light .shadow-cyan-glow { box-shadow: 0 0 15px rgba(2, 132, 199, 0.15) !important; }
-body.light .shadow-magenta-glow { box-shadow: 0 0 15px rgba(192, 38, 211, 0.15) !important; }
 
 /* Scrollbars */
-body.light::-webkit-scrollbar-track { background: #f1f5f9 !important; }
-body.light::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
-body.light::-webkit-scrollbar-thumb:hover { background: #0284c7 !important; }
+body.light ::-webkit-scrollbar-track { background: #f1f5f9 !important; }
+body.light ::-webkit-scrollbar-thumb { background: #cbd5e1 !important; }
+body.light ::-webkit-scrollbar-thumb:hover { background: #0e7490 !important; }
 
-/* Form Elements */
+/* Form elements */
 body.light input,
 body.light select,
 body.light textarea {
@@ -151,24 +148,18 @@ body.light textarea {
 body.light input:focus,
 body.light select:focus,
 body.light textarea:focus {
-  border-color: #0284c7 !important;
+  border-color: #0e7490 !important;
 }
 body.light input::placeholder,
 body.light textarea::placeholder {
   color: #94a3b8 !important;
 }
 
-/* Arbitrary class overrides for Click Nexus specific backgrounds */
-body.light .bg-\[\#0a0f14\] {
-  background-color: #f8fafc !important;
-}
-body.light .bg-\[\#0b1219\] {
-  background-color: #ffffff !important;
-}
+/* Arbitrary hard-coded hex backgrounds used by the Nexus layout */
+body.light .bg-\[\#0a0f14\] { background-color: #f8fafc !important; }
+body.light .bg-\[\#0b1219\] { background-color: #ffffff !important; }
 body.light .bg-\[\#070b0f\] {
   background-color: #f1f5f9 !important;
   border-bottom-color: #cbd5e1 !important;
 }
-body.light .bg-\[\#080d12\]\/60 {
-  background-color: rgba(255, 255, 255, 0.6) !important;
-}
+body.light .bg-\[\#080d12\]\/60 { background-color: rgba(255, 255, 255, 0.6) !important; }

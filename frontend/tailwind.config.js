@@ -8,13 +8,13 @@ export default {
     extend: {
       colors: {
         cyber: {
-          dark: '#0a0e17',
-          gray: '#0f172a',
-          slate: '#1e293b',
-          cyan: '#00f2fe',
-          magenta: '#d946ef',
-          green: '#10b981',
-          yellow: '#f59e0b',
+          dark: 'rgb(var(--cyber-dark) / <alpha-value>)',
+          gray: 'rgb(var(--cyber-gray) / <alpha-value>)',
+          slate: 'rgb(var(--cyber-slate) / <alpha-value>)',
+          cyan: 'rgb(var(--cyber-cyan) / <alpha-value>)',
+          magenta: 'rgb(var(--cyber-magenta) / <alpha-value>)',
+          green: 'rgb(var(--cyber-green) / <alpha-value>)',
+          yellow: 'rgb(var(--cyber-yellow) / <alpha-value>)',
         }
       },
       fontFamily: {
@@ -22,10 +22,11 @@ export default {
         sans: ['Space Grotesk', 'Inter', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'cyan-glow': '0 0 15px rgba(0, 242, 254, 0.25)',
-        'cyan-glow-intense': '0 0 25px rgba(0, 242, 254, 0.5)',
-        'magenta-glow': '0 0 15px rgba(217, 70, 239, 0.25)',
-        'magenta-glow-intense': '0 0 25px rgba(217, 70, 239, 0.5)',
+        'cyan-glow': '0 0 15px rgb(var(--cyber-cyan) / 0.25)',
+        'cyan-glow-intense': '0 0 25px rgb(var(--cyber-cyan) / 0.5)',
+        'magenta-glow': '0 0 15px rgb(var(--cyber-magenta) / 0.25)',
+        'magenta-glow-intense': '0 0 25px rgb(var(--cyber-magenta) / 0.5)',
+        'yellow-glow': '0 0 15px rgb(var(--cyber-yellow) / 0.25)',
       }
     },
   },
