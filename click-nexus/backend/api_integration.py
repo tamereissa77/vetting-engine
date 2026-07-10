@@ -6,6 +6,8 @@ from typing import Dict, Any, List, Optional
 VITTING_ENGINE_URL = os.getenv("VITTING_ENGINE_API_URL", "http://sovereign-backend:8000")
 
 class VittingEngineClient:
+    VITTING_ENGINE_URL = VITTING_ENGINE_URL
+
     @staticmethod
     def get_job_profiles() -> List[Dict[str, Any]]:
         """Fetch profiles from the Vitting Engine to display as jobs."""

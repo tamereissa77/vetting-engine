@@ -118,11 +118,24 @@ def parse_cv_task(self, candidate_id: int, cv_text: str):
 
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if candidate:
-            candidate.full_name = parsed_data["full_name"]
-            candidate.email = parsed_data["email"]
-            candidate.skills = parsed_data["skills"]
-            candidate.experience_years = parsed_data["experience_years"]
-            candidate.cv_raw_text = cv_text
+            is_from_form = False
+            if candidate.notes and candidate.notes.startswith("Applied via Click Nexus"):
+                is_from_form = True
+            elif candidate.full_name not in ["Extracting CV details...", "Connecting to LinkedIn...", ""] and candidate.full_name is not None:
+                is_from_form = True
+
+            if is_from_form:
+                # CV extraction only affects the capability ledger and raw source text
+                candidate.skills = parsed_data["skills"]
+                candidate.cv_raw_text = cv_text
+            else:
+                if not candidate.full_name or candidate.full_name == "Extracting CV details...":
+                    candidate.full_name = parsed_data["full_name"]
+                if not candidate.email:
+                    candidate.email = parsed_data["email"]
+                candidate.skills = parsed_data["skills"]
+                candidate.experience_years = parsed_data["experience_years"]
+                candidate.cv_raw_text = cv_text
             db.commit()
 
             # Automatic re-vetting vs current jobs/profiles
@@ -299,11 +312,22 @@ def parse_linkedin_text_task(self, candidate_id: int, profile_text: str):
 
         candidate = db.query(Candidate).filter(Candidate.id == candidate_id).first()
         if candidate:
-            candidate.full_name = parsed_data["full_name"]
-            candidate.email = parsed_data["email"]
-            candidate.skills = parsed_data["skills"]
-            candidate.experience_years = parsed_data["experience_years"]
-            candidate.cv_raw_text = cleaned_text
+            is_from_form = False
+            if candidate.notes and candidate.notes.startswith("Applied via Click Nexus"):
+                is_from_form = True
+            elif candidate.full_name not in ["Extracting CV details...", "Connecting to LinkedIn...", ""] and candidate.full_name is not None:
+                is_from_form = True
+
+            if is_from_form:
+                # LinkedIn extraction only affects the capability ledger and raw source text
+                candidate.skills = parsed_data["skills"]
+                candidate.cv_raw_text = cleaned_text
+            else:
+                candidate.full_name = parsed_data["full_name"]
+                candidate.email = parsed_data["email"]
+                candidate.skills = parsed_data["skills"]
+                candidate.experience_years = parsed_data["experience_years"]
+                candidate.cv_raw_text = cleaned_text
             db.commit()
 
             # Automatic re-vetting vs current jobs/profiles

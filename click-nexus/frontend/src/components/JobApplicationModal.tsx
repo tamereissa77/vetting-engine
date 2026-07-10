@@ -31,6 +31,8 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
   const [email, setEmail] = useState<string>('');
   const [contactNumber, setContactNumber] = useState<string>('');
   const [linkedinUrl, setLinkedinUrl] = useState<string>('');
+  const [countryOfResidence, setCountryOfResidence] = useState<string>('');
+  const [nationality, setNationality] = useState<string>('');
   const [linkedinText, setLinkedinText] = useState<string>('');
   const [isPastingLinkedin, setIsPastingLinkedin] = useState<boolean>(false);
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -121,8 +123,8 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
   };
 
   const handleDispatchApplication = async () => {
-    if (!cvFile && !linkedinText && !linkedinUrl) {
-      alert("Please upload a CV resume file or submit LinkedIn profile details.");
+    if (!cvFile) {
+      alert("Please upload your CV resume file to proceed.");
       return;
     }
 
@@ -135,6 +137,9 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
     formData.append("full_name", fullName);
     formData.append("email", email);
     formData.append("linkedin_url", linkedinUrl);
+    formData.append("contact_number", contactNumber);
+    formData.append("country_of_residence", countryOfResidence);
+    formData.append("nationality", nationality);
     if (linkedinText) {
       formData.append("linkedin_text", linkedinText);
     }
@@ -146,10 +151,7 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
       justification: proofText
     };
     formData.append("validation_answers", JSON.stringify(answers));
-
-    if (cvFile) {
-      formData.append("cv_file", cvFile);
-    }
+    formData.append("cv_file", cvFile);
 
     try {
       const response = await fetch(`${getApiUrl()}/api/applications`, {
@@ -282,6 +284,42 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
                     className="w-full bg-[#080d12]/60 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60"
                   />
                 </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">LinkedIn Profile Link</label>
+                  <input
+                    type="text"
+                    required
+                    value={linkedinUrl}
+                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    placeholder="https://linkedin.com/in/username"
+                    className="w-full bg-[#080d12]/60 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">Country of Residence</label>
+                  <input
+                    type="text"
+                    required
+                    value={countryOfResidence}
+                    onChange={(e) => setCountryOfResidence(e.target.value)}
+                    placeholder="e.g. Egypt"
+                    className="w-full bg-[#080d12]/60 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">Nationality</label>
+                  <input
+                    type="text"
+                    required
+                    value={nationality}
+                    onChange={(e) => setNationality(e.target.value)}
+                    placeholder="e.g. Egyptian"
+                    className="w-full bg-[#080d12]/60 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end pt-4">
@@ -388,20 +426,16 @@ export function JobApplicationModal({ isOpen, job, onClose }: ModalProps) {
                     </label>
                   </div>
 
-                  {/* LinkedIn payload switcher */}
+                  {/* LinkedIn registered status */}
                   <div className="border border-cyber-slate/50 rounded-lg p-5 flex flex-col justify-between bg-cyber-gray/10">
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 font-mono text-[10px] text-slate-300">
-                        <Linkedin className="text-cyber-cyan" size={14} />
-                        <span>LINKEDIN GATEWAY URL</span>
+                      <div className="flex items-center gap-2 font-mono text-[10px] text-cyber-green">
+                        <Linkedin className="text-cyber-green" size={14} />
+                        <span>LINKEDIN REGISTERED</span>
                       </div>
-                      <input
-                        type="text"
-                        value={linkedinUrl}
-                        onChange={(e) => setLinkedinUrl(e.target.value)}
-                        placeholder="https://linkedin.com/in/username"
-                        className="w-full bg-[#080d12]/60 border border-cyber-slate/50 text-slate-200 text-xs rounded px-2 py-1.5 font-mono focus:outline-none focus:border-cyber-cyan/60"
-                      />
+                      <p className="text-[10px] text-slate-400 font-mono truncate">
+                        {linkedinUrl}
+                      </p>
                     </div>
 
                     <div className="pt-2">

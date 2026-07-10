@@ -110,5 +110,41 @@ services:
     depends_on:
       - backend
 
+  auth-backend:
+    build:
+      context: ./auth-service/backend
+      dockerfile: Dockerfile
+    container_name: auth-backend
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./auth-service/backend:/app
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres_sovereign_secure}
+      - POSTGRES_DB=${POSTGRES_DB:-sovereign_talent}
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+    depends_on:
+      db:
+        condition: service_healthy
+
+  auth-frontend:
+    build:
+      context: ./auth-service/frontend
+      dockerfile: Dockerfile
+    container_name: auth-frontend
+    restart: always
+    ports:
+      - "5175:5173"
+    volumes:
+      - ./auth-service/frontend:/app
+      - /app/node_modules
+    depends_on:
+      - auth-backend
+
 volumes:
   postgres_data:
+

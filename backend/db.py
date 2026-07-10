@@ -57,6 +57,9 @@ class Candidate(Base):
     assigned_profile_id = Column(Integer, ForeignKey('talent_profiles.id', ondelete='SET NULL'), nullable=True)
     assignment_start_date = Column(Date, nullable=True)
     assignment_end_date = Column(Date, nullable=True)
+    country_of_residence = Column(String(100), nullable=True)
+    nationality = Column(String(100), nullable=True)
+    is_new_candidate = Column(Boolean, default=True, server_default='true')
     created_at = Column(DateTime, default=datetime.utcnow)
 
     assessments = relationship("Assessment", back_populates="candidate", cascade="all, delete-orphan")

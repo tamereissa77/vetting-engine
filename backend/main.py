@@ -58,6 +58,7 @@ class ProfileSchema(BaseModel):
 
 class MatchRequestSchema(BaseModel):
     profile_ids: List[int]
+    is_manual: Optional[bool] = False
 
 class DisqualifyRequestSchema(BaseModel):
     disqualified: bool
@@ -74,6 +75,9 @@ class CandidateCreateUpdateSchema(BaseModel):
     skills: List[str] = []
     experience_years: Optional[int] = 0
     is_blacklisted: Optional[bool] = False
+    country_of_residence: Optional[str] = ""
+    nationality: Optional[str] = ""
+    is_new_candidate: Optional[bool] = True
 
 
 class ProjectCreateSchema(BaseModel):
@@ -275,6 +279,9 @@ def get_candidates(database: Session = Depends(db.get_db)):
             "skills": c.skills,
             "experience_years": c.experience_years,
             "is_blacklisted": c.is_blacklisted,
+            "country_of_residence": c.country_of_residence,
+            "nationality": c.nationality,
+            "is_new_candidate": c.is_new_candidate,
             "assignments": _build_assignments(c),
             "created_at": c.created_at,
             "highest_score": best_assessment.match_score if best_assessment else None,
@@ -319,6 +326,9 @@ def get_candidate_details(candidate_id: int, database: Session = Depends(db.get_
         "skills": candidate.skills,
         "experience_years": candidate.experience_years,
         "is_blacklisted": candidate.is_blacklisted,
+        "country_of_residence": candidate.country_of_residence,
+        "nationality": candidate.nationality,
+        "is_new_candidate": candidate.is_new_candidate,
         "assignments": _build_assignments(candidate),
         "cv_raw_text": candidate.cv_raw_text,
         "created_at": candidate.created_at,
@@ -362,15 +372,13 @@ def update_candidate(candidate_id: int, updated: CandidateCreateUpdateSchema, da
     if not db_cand:
         raise HTTPException(status_code=404, detail="Candidate not found.")
     
-    db_cand.full_name = updated.full_name
-    db_cand.email = updated.email
-    db_cand.linkedin_url = updated.linkedin_url
-    db_cand.contact_number = updated.contact_number
-    db_cand.notes = updated.notes
-    db_cand.skills = updated.skills
-    db_cand.experience_years = updated.experience_years
-    db_cand.is_blacklisted = updated.is_blacklisted
-    
+    update_data = updated.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        if key == "is_new_candidate":
+            db_cand.is_new_candidate = value if not updated.is_blacklisted else False
+        else:
+            setattr(db_cand, key, value)
+            
     database.commit()
     database.refresh(db_cand)
     
@@ -600,6 +608,11 @@ def match_candidate(candidate_id: int, request: MatchRequestSchema, database: Se
         
     if candidate.is_blacklisted:
         raise HTTPException(status_code=400, detail="Candidate is blacklisted. System override or whitelist required.")
+        
+    # Mark as no longer a new candidate only if manually requested
+    if request.is_manual:
+        candidate.is_new_candidate = False
+        database.commit()
         
     # If profile list is empty, default to checking all pre-seeded profiles
     profile_ids = request.profile_ids

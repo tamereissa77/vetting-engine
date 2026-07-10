@@ -5,8 +5,29 @@ import {
    AlertTriangle, User, Mail, FileText, Sparkles, Network,
    UserX, UserCheck, ClipboardList, AlertCircle,
    ChevronDown, ChevronUp, CalendarDays, TrendingUp, Clock, X, Sun, Moon,
-   Briefcase, BriefcaseOff
+   Briefcase, LogOut
  } from 'lucide-react';
+
+const BriefcaseOff = ({ size = 24, ...props }: React.ComponentProps<'svg'> & { size?: number }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="lucide lucide-briefcase-off"
+    {...props}
+  >
+    <path d="M10 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" />
+    <path d="M12 12H4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-1" />
+    <path d="M12 7h8a2 2 0 0 1 2 2v3" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
 import { api, API_URL, TalentProfile, Candidate, CandidateDetails, Project, UtilizationData } from './utils/api';
 import { AssessmentRing } from './components/AssessmentRing';
 import { ProfileModal } from './components/ProfileModal';
@@ -35,6 +56,49 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
   });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<string>('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenParam = params.get('token');
+    const roleParam = params.get('role');
+
+    if (tokenParam && roleParam) {
+      localStorage.setItem('token', tokenParam);
+      localStorage.setItem('role', roleParam);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      url.searchParams.delete('role');
+      window.history.replaceState({}, '', url.pathname + url.search);
+    }
+
+    const token = localStorage.getItem('token');
+    const role = localStorage.getItem('role');
+
+    if (!token || !role) {
+      window.location.href = `http://${window.location.hostname}:5175/`;
+      return;
+    }
+
+    const allowedRoles = ['admin', 'HR', 'project_manager'];
+    if (!allowedRoles.includes(role)) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      window.location.href = `http://${window.location.hostname}:5175/?error=unauthorized`;
+      return;
+    }
+
+    setIsAuthenticated(true);
+    setUserRole(role);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.href = `http://${window.location.hostname}:5175/`;
+  };
 
   useEffect(() => {
     if (theme === 'light') {
@@ -279,6 +343,7 @@ export default function App() {
   const [ledgerFilterQuery, setLedgerFilterQuery] = useState<string>('');
   const [registryFilterRole, setRegistryFilterRole] = useState<string>('');
   const [registryFilterMinScore, setRegistryFilterMinScore] = useState<number>(0);
+  const [registryFilterStatus, setRegistryFilterStatus] = useState<string>('');
   const [registrySearchQuery, setRegistrySearchQuery] = useState<string>('');
 
   // Delete confirmation modal state
@@ -297,6 +362,9 @@ export default function App() {
       if (!candidate.full_name.toLowerCase().includes(q)) {
         return false;
       }
+    }
+    if (registryFilterStatus === 'new' && !candidate.is_new_candidate) {
+      return false;
     }
     if (registryFilterRole) {
       const activeAssessment = candidate.assessments?.find((a) => a.role_name === registryFilterRole);
@@ -752,7 +820,7 @@ export default function App() {
   const handleRunMatchmaking = async () => {
     if (!selectedCandidateId || selectedMatchProfiles.length === 0) return;
     try {
-      const res = await api.matchCandidate(selectedCandidateId, selectedMatchProfiles);
+      const res = await api.matchCandidate(selectedCandidateId, selectedMatchProfiles, true);
       startTaskProgressStream(res.task_id);
       setSelectedMatchProfiles([]);
     } catch (err) {
@@ -765,6 +833,15 @@ export default function App() {
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#060913] flex flex-col items-center justify-center font-mono text-xs text-slate-500 gap-3">
+        <div className="w-6 h-6 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin" />
+        <span className="tracking-widest uppercase">Verifying sovereign session...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
@@ -851,6 +928,18 @@ export default function App() {
         
         {/* Status Indicators */}
         <div className="flex items-center gap-6 text-xs font-mono">
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 px-3 py-1 bg-cyber-gray border border-cyber-slate hover:border-red-500/40 rounded-full text-slate-300 hover:text-red-400 transition-colors focus:outline-none cursor-pointer"
+            title="Log out of Sovereign Vitting"
+          >
+            <LogOut size={12} />
+            <span className="text-[10px] tracking-wider uppercase font-bold">
+              Logout
+            </span>
+          </button>
+
           {/* Theme Toggler */}
           <button
             onClick={toggleTheme}
@@ -903,6 +992,7 @@ export default function App() {
                     key={layer.name}
                     onClick={() => {
                       setSelectedLayer(layer.filter);
+                      setRegistryFilterStatus('');
                       // Switch to profiles tab since we are filtering profiles
                       setActiveTab('profiles');
                     }}
@@ -926,6 +1016,36 @@ export default function App() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Quick Registry Filters */}
+            <div className="space-y-1 border-t border-cyber-slate/30 pt-4 mt-2">
+              <h4 className="text-[10px] font-mono uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-2">
+                <AlertCircle size={12} className="text-cyber-yellow" />
+                <span>Registry Filters</span>
+              </h4>
+              <button
+                onClick={() => {
+                  setSelectedLayer('');
+                  if (registryFilterStatus === 'new' && activeTab === 'candidates') {
+                    setRegistryFilterStatus('');
+                  } else {
+                    setRegistryFilterStatus('new');
+                    setActiveTab('candidates');
+                  }
+                }}
+                className={`w-full text-left p-3 rounded-lg border transition-all text-xs flex items-center justify-between ${
+                  registryFilterStatus === 'new' && activeTab === 'candidates'
+                    ? 'bg-cyber-yellow/10 border-cyber-yellow text-cyber-yellow font-bold shadow-yellow-glow'
+                    : 'bg-cyber-gray/40 border-cyber-slate/30 text-slate-300 hover:border-cyber-slate hover:bg-cyber-gray/70'
+                }`}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <User size={14} className={registryFilterStatus === 'new' && activeTab === 'candidates' ? 'text-cyber-yellow' : 'text-slate-500'} />
+                  <span>New Candidates</span>
+                </div>
+                {registryFilterStatus === 'new' && activeTab === 'candidates' && <div className="w-1.5 h-1.5 rounded-full bg-cyber-yellow"></div>}
+              </button>
             </div>
           </div>
 
@@ -1779,6 +1899,21 @@ export default function App() {
                       </select>
                     </div>
 
+                    {/* Status Filter */}
+                    <div className="flex flex-col gap-1.5 min-w-[150px]">
+                      <label className="text-[9px] font-mono uppercase tracking-wider text-slate-400">
+                        Filter by Status
+                      </label>
+                      <select
+                        value={registryFilterStatus}
+                        onChange={(e) => setRegistryFilterStatus(e.target.value)}
+                        className="bg-cyber-dark/80 border border-cyber-slate/50 text-slate-200 text-xs rounded px-3 py-2 font-mono focus:outline-none focus:border-cyber-cyan/60 transition-colors"
+                      >
+                        <option value="">All Statuses</option>
+                        <option value="new">New Candidate</option>
+                      </select>
+                    </div>
+
                     {/* Min Score Filter */}
                     <div className="flex flex-col gap-1.5 min-w-[200px]">
                       <div className="flex items-center justify-between">
@@ -1805,12 +1940,13 @@ export default function App() {
                     <span className="text-[10px] font-mono text-slate-400">
                       MATCHES: <span className="text-cyber-green font-bold">{filteredCandidates.length}</span> / {candidates.length}
                     </span>
-                    {(registryFilterRole || registryFilterMinScore > 0 || registrySearchQuery) && (
+                    {(registryFilterRole || registryFilterMinScore > 0 || registrySearchQuery || registryFilterStatus) && (
                       <button
                         onClick={() => {
                           setRegistryFilterRole('');
                           setRegistryFilterMinScore(0);
                           setRegistrySearchQuery('');
+                          setRegistryFilterStatus('');
                         }}
                         className="px-3 py-1 bg-cyber-magenta/10 hover:bg-cyber-magenta/25 border border-cyber-magenta/30 hover:border-cyber-magenta/50 text-cyber-magenta hover:text-white rounded font-mono text-[9px] uppercase tracking-wider transition-all"
                       >
@@ -1861,6 +1997,11 @@ export default function App() {
                               }
                               return null;
                             })()}
+                            {candidate.is_new_candidate && (
+                              <span className="px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">
+                                new candidate
+                              </span>
+                            )}
                             <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider ${
                               candidate.is_blacklisted 
                                 ? 'bg-cyber-magenta/25 text-cyber-magenta border border-cyber-magenta/30 animate-pulse' 
@@ -1896,14 +2037,41 @@ export default function App() {
                                 ) : (
                                   <span className="text-[10px] font-sans text-slate-500 italic block">No tags parsed yet.</span>
                                 )}
-                              </div>
+                                {candidate.linkedin_url && (
+                                  <div className="text-[10px] font-mono text-cyber-cyan truncate flex items-center gap-1 mt-2">
+                                    <Linkedin size={10} />
+                                    <a 
+                                      href={candidate.linkedin_url.startsWith('http') ? candidate.linkedin_url : `https://${candidate.linkedin_url}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      className="truncate hover:underline"
+                                    >
+                                      {candidate.linkedin_url}
+                                    </a>
+                                  </div>
+                                )}
 
-                              {candidate.linkedin_url && (
-                                <div className="text-[10px] font-mono text-cyber-cyan truncate flex items-center gap-1 mt-2">
-                                  <Linkedin size={10} />
-                                  <span className="truncate">{candidate.linkedin_url}</span>
-                                </div>
-                              )}
+                                {candidate.contact_number && (
+                                  <div className="text-[10px] font-mono text-slate-300 truncate flex items-center gap-1 mt-1">
+                                    <span className="text-slate-400">PHONE:</span>
+                                    <span>{candidate.contact_number}</span>
+                                  </div>
+                                )}
+
+                                {candidate.country_of_residence && (
+                                  <div className="text-[10px] font-mono text-slate-300 truncate flex items-center gap-1 mt-1">
+                                    <span className="text-slate-400">RESIDENCE:</span>
+                                    <span>{candidate.country_of_residence}</span>
+                                  </div>
+                                )}
+
+                                {candidate.nationality && (
+                                  <div className="text-[10px] font-mono text-slate-300 truncate flex items-center gap-1 mt-1 mb-2">
+                                    <span className="text-slate-400">NATIONALITY:</span>
+                                    <span>{candidate.nationality}</span>
+                                  </div>
+                                )}
+                              </div>
                             </>
                           )}
 
@@ -3202,7 +3370,7 @@ export default function App() {
         onRunVetting={async (candidateId, profileId) => {
           try {
             setActiveVettingProfileId(profileId);
-            const res = await api.matchCandidate(candidateId, [profileId]);
+            const res = await api.matchCandidate(candidateId, [profileId], true);
             startTaskProgressStream(res.task_id);
           } catch (err) {
             alert('Failed to trigger vetting assessment: ' + err);

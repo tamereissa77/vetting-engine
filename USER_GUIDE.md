@@ -16,26 +16,41 @@
 8. [Utilization Tab — Resource Tracking](#8-utilization-tab--resource-tracking)
 9. [Assigning a Candidate — Calendar Picker](#9-assigning-a-candidate--calendar-picker)
 10. [Candidate Dossier](#10-candidate-dossier)
+11. [Click Nexus Applicant Tracking System](#11-click-nexus-applicant-tracking-system)
 
 ---
 
 ## 1. Accessing the Platform
 
-Start all services with Docker Compose:
+Start all services with Docker Compose (remembering to start both the core Click-Vitting composition and the Click-Nexus composition):
 
 ```bash
-docker-compose up --build
+# 1. Start Core Vitting Engine & Auth services
+docker compose up --build -d
+
+# 2. Start Click Nexus ATS gateway services
+docker compose -f click-nexus/docker-compose.yml up --build -d
 ```
 
-Then open your browser and go to:
+Then open your browser and go to the **Central Auth Portal** at:
 
-| Service | URL |
-|---|---|
-| Dashboard | http://localhost:5173 |
-| API Docs (Swagger) | http://localhost:8000/docs |
+| Service | URL | Role Access |
+|---|---|---|
+| **Central Auth Portal** | http://localhost:5175 | All Users (Sign-in / Sign-up) |
+| **Vitting Engine Dashboard** | http://localhost:5173 | Admins, HR, Project Managers |
+| **Click Nexus ATS Portal** | http://localhost:5174 | Admins, Applicants |
+| **API Docs (Core)** | http://localhost:8000/docs | Developer reference |
+
+### Role-Based Access Redirection
+When you log in through the portal, the system automatically redirects you:
+- **Applicants** are sent directly to the Click Nexus ATS portal.
+- **HR & Project Managers** are sent directly to the Vitting Engine dashboard.
+- **Admins** are presented with a central selector page to choose which workspace to enter.
+
+Sessions require a valid JWT token. Unauthorized navigation directly to the dashboard URLs will redirect back to the login page.
 
 ![Platform landing page](docs/screenshots/01-landing.png)
-> *The dashboard loads on the Profiles tab by default.*
+> *The central auth page routes authenticated sessions to their designated applications.*
 
 ---
 
@@ -163,6 +178,12 @@ Click **+ New Candidate** and fill in the form: full name, email, contact number
 
 ![Manual candidate creation](docs/screenshots/05-candidates-manual.png)
 > *The manual candidate creation form.*
+
+### "New Candidate" Status Badge & Left Sidebar Filter Toggle
+
+All candidate dossiers ingested via the Click Nexus ATS gateway are initialized with a prominent yellow `"New Candidate"` status tag on their cards in the Registry ledger.
+- **Filtering New Candidates**: In the Left Panel Sidebar under "Registry Filters", click the **New Candidates** button to toggle the list to show only new, unvetted candidates. Click it again to disable the filter and return to the default list.
+- **Tag Removal Lifecyle**: The yellow badge is automatically cleared when the candidate is manually vetted (by executing a matchmaking assessment), blacklisted, or deleted.
 
 ### Searching Candidates
 
@@ -377,6 +398,29 @@ The dossier includes:
 
 ![Dossier verdict](docs/screenshots/10-dossier-verdict.png)
 > *AI-generated verdict for a specific profile assessment.*
+
+---
+
+## 11. Click Nexus Applicant Tracking System
+
+The Click Nexus gateway (port 5174) serves as the candidate-facing application intake.
+
+### Applying to a Job
+1. Log in to the Central Auth Portal (port 5175) using the **Applicant** role credentials.
+2. Select an open job posting from the dashboard list.
+3. Click the **Apply Now** button to launch the application wizard.
+4. Fill in all mandatory candidate parameters:
+   - Full Name
+   - Email Address
+   - Secure Contact Number
+   - LinkedIn Profile URL
+   - Country of Residence
+   - Nationality
+5. Upload a resume file (PDF or DOCX format).
+6. Click **Submit Application**.
+
+### Form Data Integrity
+The application form details are protected against AI parser errors. The platform's CV parser runs strictly in the background to extract capabilities (`skills`) and store the raw text payload, without overwriting the applicant's input parameters.
 
 ---
 

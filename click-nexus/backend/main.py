@@ -183,10 +183,13 @@ async def create_application(
     job_role_name: str = Form(...),
     full_name: str = Form(...),
     email: str = Form(...),
-    linkedin_url: Optional[str] = Form(None),
+    linkedin_url: str = Form(...),
+    contact_number: str = Form(...),
+    country_of_residence: str = Form(...),
+    nationality: str = Form(...),
     linkedin_text: Optional[str] = Form(None),
     validation_answers: str = Form("{}"),
-    cv_file: Optional[UploadFile] = File(None),
+    cv_file: UploadFile = File(...),
     database: Session = Depends(get_db)
 ):
     # Parse dynamic questions answers
@@ -212,7 +215,7 @@ async def create_application(
 
     add_app_log(database, new_app.id, f"Application received for: {job_role_name}.")
     
-    # 2. Upload/Paste payload to Vitting Engine
+    # 2. Upload CV payload to Vitting Engine
     candidate_id = None
     vitting_task_id = None
 
@@ -224,30 +227,27 @@ async def create_application(
             candidate_id = res.get("candidate_id")
             vitting_task_id = res.get("task_id")
             add_app_log(database, new_app.id, f"CV successfully uploaded. Vitting Engine Candidate ID: {candidate_id}")
-    elif linkedin_text:
-        add_app_log(database, new_app.id, "Processing pasted LinkedIn profile payload...")
-        res = VittingEngineClient.paste_linkedin(linkedin_text, linkedin_url)
-        if res:
-            candidate_id = res.get("candidate_id")
-            vitting_task_id = res.get("task_id")
-            add_app_log(database, new_app.id, f"LinkedIn text enqueued. Vitting Engine Candidate ID: {candidate_id}")
-    else:
-        # If neither is provided, create candidate with name/email only
-        add_app_log(database, new_app.id, "No CV or LinkedIn text payload. Registering base candidate profile...")
-        try:
-            url = f"{VittingEngineClient.VITTING_ENGINE_URL}/api/candidates"
-            payload = {
-                "full_name": full_name,
-                "email": email,
-                "linkedin_url": linkedin_url or "",
-                "notes": f"Applied via Click Nexus Gateway for {job_role_name}"
-            }
-            res = requests.post(url, json=payload, timeout=10)
-            if res.status_code == 200:
-                candidate_id = res.json().get("id")
-                add_app_log(database, new_app.id, f"Base candidate profile indexed. Candidate ID: {candidate_id}")
-        except Exception as e:
-            add_app_log(database, new_app.id, f"Base candidate registration failed: {str(e)}")
+            
+            # Bind form details to candidate profile in Vitting Engine
+            try:
+                put_url = f"{VittingEngineClient.VITTING_ENGINE_URL}/api/candidates/{candidate_id}"
+                put_payload = {
+                    "full_name": full_name,
+                    "email": email,
+                    "linkedin_url": linkedin_url,
+                    "contact_number": contact_number,
+                    "country_of_residence": country_of_residence,
+                    "nationality": nationality,
+                    "is_new_candidate": True,
+                    "notes": f"Applied via Click Nexus Gateway for {job_role_name}"
+                }
+                put_res = requests.put(put_url, json=put_payload, timeout=10)
+                if put_res.status_code == 200:
+                    add_app_log(database, new_app.id, "Successfully bound mandatory form details to candidate profile.")
+                else:
+                    add_app_log(database, new_app.id, f"Warning: Failed to bind details: {put_res.text}")
+            except Exception as e:
+                add_app_log(database, new_app.id, f"Warning: Error binding details: {str(e)}")
 
     if not candidate_id:
         new_app.status = "failed"

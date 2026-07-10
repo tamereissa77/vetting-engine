@@ -194,6 +194,9 @@ def seed_database():
         db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assigned_profile_id INTEGER REFERENCES talent_profiles(id) ON DELETE SET NULL;"))
         db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assignment_start_date DATE;"))
         db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS assignment_end_date DATE;"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS country_of_residence VARCHAR(100);"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS nationality VARCHAR(100);"))
+        db.execute(text("ALTER TABLE candidates ADD COLUMN IF NOT EXISTS is_new_candidate BOOLEAN DEFAULT TRUE;"))
         db.execute(text("ALTER TABLE assessments ADD COLUMN IF NOT EXISTS is_disqualified BOOLEAN DEFAULT FALSE;"))
         # Create multi-slot assignments table
         db.execute(text("""

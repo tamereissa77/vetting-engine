@@ -317,11 +317,11 @@ export const api = {
     return res.json();
   },
 
-  async matchCandidate(candidateId: number, profileIds: number[]): Promise<{ task_id: string; message: string }> {
+  async matchCandidate(candidateId: number, profileIds: number[], isManual: boolean = false): Promise<{ task_id: string; message: string }> {
     const res = await fetch(`${API_URL}/api/candidates/${candidateId}/match`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile_ids: profileIds }),
+      body: JSON.stringify({ profile_ids: profileIds, is_manual: isManual }),
     });
     if (!res.ok) throw new Error('Failed to trigger matchmaking engine');
     return res.json();
